@@ -13,8 +13,12 @@ from fastapi.security import OAuth2PasswordBearer
 from app.models import UserSession, VerificationCode, PasswordResetCode
 from app.schemas import UserCreate, LoginRequest, ProfileUpdate, PasswordUpdate, VerifyResetCodeRequest, UserStatusResponse, LogoutRequest, VerifyRequest, UserCreateAdmin, ResendCodeRequest
 from passlib.context import CryptContext
+import random
 
-# ⚠️ Création des tables (à faire au démarrage, pas dans les endpoints)
+from app.services.messaging import send_reset_email, send_reset_sms
+
+
+#  Création des tables (à faire au démarrage, pas dans les endpoints)
 # En async, il vaut mieux utiliser alembic pour les migrations
 # Base.metadata.create_all(bind=engine)  # à éviter en async
 
@@ -33,7 +37,7 @@ def verify_password(password: str, hashed: str) -> bool:
 # -----------------------------
 # Config JWT
 # -----------------------------
-SECRET_KEY = "ton_secret_key"   # ⚠️ change avec une vraie clé secrète
+SECRET_KEY = "ton_secret_key"   #  change avec une vraie clé secrète
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -136,7 +140,7 @@ async def pre_register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     # 🔹 Afficher le code dans la console
-    print(f"✅ Code de vérification pour {db_user.email} : {code}")
+    print(f" Code de vérification pour {db_user.email} : {code}")
 
     # En local : tu peux aussi le retourner dans la réponse pour tester
     return {"status": "success", "message": "Code généré", "code": code}
@@ -163,7 +167,7 @@ async def verify(payload: VerifyRequest, db: AsyncSession = Depends(get_db)):
     if verification.expires_at < datetime.utcnow():
         return {"status": "error", "message": "Code expiré"}
 
-    # ✅ Valider l'inscription
+    #  Valider l'inscription
     user.is_verified = True
     await db.commit()
 
@@ -231,16 +235,24 @@ async def verify_reset_code(payload: VerifyResetCodeRequest, db: AsyncSession = 
     identifier = payload.identifier
     code = payload.code
 
-    print(f"🔎 Vérification du code pour identifiant: {identifier}, code reçu: {code}")
+    print(f" Vérification du code pour identifiant: {identifier}, code reçu: {code}")
+
+    #  Envoi par email si identifiant = email
+    if identifier == user.email:
+        await send_reset_email(user.email, code)
+
+    #  Envoi par SMS si identifiant = téléphone
+    else:
+        send_reset_sms(user.telephone, code)
 
     result = await db.execute(
         select(User).where((User.email == identifier) | (User.telephone == identifier))
     )
     user = result.scalars().first()
-    print(f"➡️ Utilisateur trouvé: {user.email if user else 'aucun'}")
+    print(f" Utilisateur trouvé: {user.email if user else 'aucun'}")
 
     if not user:
-        print("❌ Aucun utilisateur trouvé")
+        print(" Aucun utilisateur trouvé")
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
     reset_code = await db.execute(
@@ -251,13 +263,13 @@ async def verify_reset_code(payload: VerifyResetCodeRequest, db: AsyncSession = 
         )
     )
     reset_code = reset_code.scalars().first()
-    print(f"➡️ Code trouvé en base: {reset_code.code if reset_code else 'aucun'}")
+    print(f" Code trouvé en base: {reset_code.code if reset_code else 'aucun'}")
 
     if not reset_code:
         print("❌ Code invalide ou expiré")
         raise HTTPException(status_code=400, detail="Code invalide ou expiré")
 
-    print("✅ Code validé avec succès")
+    print(" Code validé avec succès")
     return {"status": "success", "message": "Code validé"}
 
 # 3. Mise à jour du mot de passe
@@ -267,16 +279,16 @@ async def set_password(payload: PasswordUpdate, db: AsyncSession = Depends(get_d
     code = payload.code
     new_password = payload.new_password
 
-    print(f"🔎 Requête reçue pour set-password avec identifiant: {identifier}, code: {code}")
+    print(f" Requête reçue pour set-password avec identifiant: {identifier}, code: {code}")
 
     result = await db.execute(
         select(User).where((User.email == identifier) | (User.telephone == identifier))
     )
     user = result.scalars().first()
-    print(f"➡️ Utilisateur trouvé: {user.email if user else 'aucun'}")
+    print(f" Utilisateur trouvé: {user.email if user else 'aucun'}")
 
     if not user:
-        print("❌ Aucun utilisateur trouvé")
+        print(" Aucun utilisateur trouvé")
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
     reset_code = await db.execute(
@@ -287,10 +299,10 @@ async def set_password(payload: PasswordUpdate, db: AsyncSession = Depends(get_d
         )
     )
     reset_code = reset_code.scalars().first()
-    print(f"➡️ Code trouvé en base: {reset_code.code if reset_code else 'aucun'}")
+    print(f" Code trouvé en base: {reset_code.code if reset_code else 'aucun'}")
 
     if not reset_code:
-        print("❌ Code invalide ou expiré")
+        print(" Code invalide ou expiré")
         raise HTTPException(status_code=400, detail="Code invalide ou expiré")
 
     print(f"🛠 Mise à jour du mot de passe pour {user.email}")
@@ -298,7 +310,16 @@ async def set_password(payload: PasswordUpdate, db: AsyncSession = Depends(get_d
     await db.commit()
     await db.refresh(user)
 
-    print(f"✅ Mot de passe mis à jour pour {user.email}")
+     #  Envoi par email si identifiant = email
+    if identifier == user.email:
+        await send_reset_email(user.email, code)
+
+    # 📱 Envoi par SMS si identifiant = téléphone
+    else:
+        send_reset_sms(user.telephone, code)
+
+
+    print(f" Mot de passe mis à jour pour {user.email}")
     return {"status": "success", "message": "Mot de passe mis à jour avec succès"}
 
 

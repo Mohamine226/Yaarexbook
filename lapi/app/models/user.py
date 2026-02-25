@@ -15,7 +15,7 @@ class User(Base):
     pays = Column(String, nullable=True)
     profession = Column(String, nullable=True)
     password = Column(String(255), nullable=False)
-    role = Column(String, default="acheteur")
+    role = Column(String, default="Lecteur")
 
     ventes = Column(Integer, default=0)  #  compteur des ventes réalisées
     date_publication = Column(DateTime, server_default=func.now())

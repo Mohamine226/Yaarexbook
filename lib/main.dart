@@ -74,7 +74,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _checkSession() async {
-    // ✅ Si userId est déjà passé depuis PageConnexion ou sauvegardé
+    //  Si userId est déjà passé depuis PageConnexion ou sauvegardé
     if (widget.userId != null) {
       setState(() {
         userId = widget.userId;

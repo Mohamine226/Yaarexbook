@@ -1,5 +1,5 @@
 class Utilisateur {
-  static int id = 0; // 🔹 identifiant unique (vient du backend)
+  static int id = 0;
   static String nom = "";
   static String prenom = "";
   static String pays = "";
@@ -9,8 +9,6 @@ class Utilisateur {
   static String password = "";
   static String role = "";
   static String deviceType = "";
-
-  static int walletId = 0; // ✅ champ réel pour stocker l'ID du wallet
 
   static void reset() {
     id = 0;
@@ -23,7 +21,6 @@ class Utilisateur {
     password = "";
     role = "";
     deviceType = "";
-    walletId = 0; // ✅ reset aussi le wallet
   }
 
   static Map<String, dynamic> toJson() {
@@ -38,7 +35,6 @@ class Utilisateur {
       "password": password,
       "role": role,
       "deviceType": deviceType,
-      "walletId": walletId, // ✅ ajouté
     };
   }
 }

@@ -104,7 +104,7 @@ class _CompteState extends State<Compte> {
           const SizedBox(height: 20),
 
           // 🔹 Affichage selon le rôle
-          if (Utilisateur.role.toLowerCase() == "acheteur")
+          if (Utilisateur.role.toLowerCase() == "lecteur")
             Acheteur(
               documentsAchetes: nbLivresAchetes,
               userId: Utilisateur.id,

@@ -9,7 +9,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     titre = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    prix = Column(Float, nullable=False)
+    prix = Column(Integer, nullable=False)
     categorie = Column(String, nullable=False)
     langue = Column(String, nullable=False)
     domaine = Column(String, nullable=True)

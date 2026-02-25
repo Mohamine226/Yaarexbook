@@ -288,7 +288,7 @@ class _CategorieState extends State<Categorie> {
         child: Column(
           children: [
             SizedBox(
-              height: 140,
+              height: 150,
               width: double.infinity,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
@@ -304,13 +304,13 @@ class _CategorieState extends State<Categorie> {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
-              child: Text(
-                "\$${data.price}",
-                style: const TextStyle(color: Colors.green),
-              ),
-            ),
+            //Padding(
+             // padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+             // child: Text(
+              //  "${data.price} FCFA",
+               // style: const TextStyle(color: Colors.green),
+             // ),
+            //),
           ],
         ),
       ),

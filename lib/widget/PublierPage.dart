@@ -213,7 +213,7 @@ class _PublierPageState extends State<PublierPage> {
                             couverturePath != null) {
                           final nouveauLivre = PdfData(
                             title: titreController.text.trim(),
-                            price: double.tryParse(prixController.text.trim()) ?? 0,
+                            price: int.tryParse(prixController.text.trim()) ?? 0,
                             image: couverturePath!, // chemin local image
                             domain: selectedDomaine.trim(),
                             language: selectedLangue,

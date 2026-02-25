@@ -26,7 +26,7 @@ async def publier_document_upload(
     vendeur_id: int,
     titre: str = Form(...),
     description: str = Form(...),
-    prix: float = Form(...),
+    prix: int = Form(...),
     categorie: str = Form(...),
     langue: str = Form(...),
     domaine: str = Form(...),

@@ -35,7 +35,7 @@ class Acheteur extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _statBox("Documents achetés", documentsAchetes.toString()),
+              _statBox("Documents obtenus", documentsAchetes.toString()),
             ],
           ),
         ),
@@ -50,16 +50,16 @@ class Acheteur extends StatelessWidget {
           ),
           child: Column(
             children: [
-              _actionButton(
-                Icons.access_time,
-                "Historique",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => HistoriquePage1(userId: userId)),
-                  );
-                },
-              ),
+              //_actionButton(
+              //  Icons.access_time,
+               // "Historique",
+               // onTap: () {
+                  //Navigator.push(
+                 //   context,
+                  //  MaterialPageRoute(builder: (_) => HistoriquePage1(userId: userId)),
+                 // );
+               // },
+             // ),
               _actionButton(
                 Icons.settings,
                 "Paramètre",
@@ -75,7 +75,7 @@ class Acheteur extends StatelessWidget {
                 "Déconnexion",
                 onTap: () async {
                   try {
-                    // 🔹 Vérifier le token avant l'appel
+                    //  Vérifier le token avant l'appel
                     final tokenAvant = await ApiService.getToken();
                     print("📦 Token récupéré avant logout: $tokenAvant");
 
@@ -112,7 +112,7 @@ class Acheteur extends StatelessWidget {
 
                       // Vérifier après suppression
                       final tokenApres = await ApiService.getToken();
-                      print("❌ Token après suppression: $tokenApres");
+                      print(" Token après suppression: $tokenApres");
                       // Message utilisateur
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(response['message'] ?? "Déconnecté")),

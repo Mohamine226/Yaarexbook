@@ -51,7 +51,7 @@ class DatabaseService {
       pdfPath TEXT,
       textPath TEXT,
 
-      price REAL,
+      price INTEGER,
       achats INTEGER DEFAULT 0,
 
       nom TEXT,

@@ -161,11 +161,11 @@ class _DetailPageState extends State<DetailPage> {
                           style: const TextStyle(fontSize: 16)),
                       Text("Langue : ${widget.data.language}",
                           style: const TextStyle(fontSize: 16)),
-                      Text("\$${widget.data.price.toStringAsFixed(2)}",
-                          style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green)),
+                      //Text("${widget.data.price} FCFA",
+                      //    style: const TextStyle(
+                       //       fontSize: 18,
+                       //       fontWeight: FontWeight.bold,
+                        //      color: Colors.green)),
                       const SizedBox(height: 16),
                       Text("Desciption: ${widget.data.description}",
                           style: const TextStyle(
@@ -203,11 +203,12 @@ class _DetailPageState extends State<DetailPage> {
 
                     if (result == true) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Livre ajouté à votre bibliothèque ✅")),
+                        const SnackBar(content: Text("Livre ajouté à votre bibliothèque ")),
                       );
                     }
+
                   },
-                child: const Text("Acheter",
+                child: const Text("Obtenir",
                     style: TextStyle(
                         fontSize: 18, fontWeight: FontWeight.bold)),
               ),

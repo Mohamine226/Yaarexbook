@@ -185,15 +185,15 @@ class _FichiersState extends State<Fichiers> {
                     color: Colors.green,
                     count: nbDocuments.toString(),
                   ),
-                  _buildCategory(
-                    context,
-                    "Mougli IA",
-                    iconWidget: Image.asset(
-                      "assets/images/mougli.png",
-                      height: 30,
-                      width: 100,
-                    ),
-                  ),
+                  //_buildCategory(
+                  //  context,
+                  //  "Mougli IA",
+                  //  iconWidget: Image.asset(
+                  //    "assets/images/mougli.png",
+                  //    height: 30,
+                  //    width: 100,
+                  //  ),
+                 // ),
                 ],
               ),
             ),

@@ -104,8 +104,16 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
     db.add(reset_code)
     await db.commit()
 
-    # 🔹 Affichage du code dans la console (DEV uniquement)
-    print(f"✅ Code de réinitialisation pour {identifier}: {code}")
+    #  Affichage du code dans la console (DEV uniquement)
+    print(f" Code de réinitialisation pour {identifier}: {code}")
+
+    #  Envoi par email si identifiant = email
+    if identifier == user.email:
+        await send_reset_email(user.email, code)
+
+    #  Envoi par SMS si identifiant = téléphone
+    else:
+        send_reset_sms(user.telephone, code)
 
     return {"status": "success", "message": "Code généré et affiché en console"}
 

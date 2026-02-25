@@ -307,7 +307,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             SizedBox(
-              height: 140,
+              height: 150,
               width: double.infinity,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
@@ -324,11 +324,11 @@ class _HomePageState extends State<HomePage> {
                 textAlign: TextAlign.center,
               ),
             ),
-            Text(
-              "\$${livre.price.toStringAsFixed(2)}",
-              style: const TextStyle(color: Colors.green),
-              textAlign: TextAlign.center,
-            ),
+            //Text(
+            //  "${livre.price} FCFA",
+            //  style: const TextStyle(color: Colors.green),
+            //  textAlign: TextAlign.center,
+            //),
           ],
         ),
       ),

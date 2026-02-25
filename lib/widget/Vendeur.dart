@@ -38,7 +38,7 @@ class _VendeurState extends State<Vendeur> {
   int nbLivresPublies = 0;
   int nbDocumentsVendus = 0;
   int documentsAchetes = 0;
-  double totalGagne = 0.0;
+  double totalGagne = 0;
   bool isLoading = true;
 
   @override
@@ -146,13 +146,13 @@ class _VendeurState extends State<Vendeur> {
             child: ListTile(
               leading: const Icon(Icons.account_balance_wallet, color: Colors.green),
               title: const Text("Solde disponible"),
-              subtitle: Text("${totalGagne.toStringAsFixed(2)} FCFA",
+              subtitle: Text("$totalGagne FCFA"),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: Colors.green,
                 ),
-              ), // ✅ correction
+              ), // ✅correction
             ),
           ),
 

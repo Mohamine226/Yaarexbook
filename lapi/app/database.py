@@ -2,7 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # 🔹 URL de connexion SQLite en mode async
-SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./users.db"
+#SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./users.db"
+
+SQLALCHEMY_DATABASE_URL = "postgresql+asyncpg://mohamine:6414Gnam1@localhost:5432/daagabase"
 
 # Création du moteur async
 engine = create_async_engine(

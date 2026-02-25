@@ -77,7 +77,7 @@ class UserResponse(BaseModel):
     telephone: str
     pays: str
     profession: str
-    date_publication: Optional[datetime] = None  # ✅ ajouté
+    date_publication: Optional[datetime] = None  #  ajouté
 
 
 
@@ -96,7 +96,7 @@ class LoginRequest(BaseModel):
 class DocumentCreate(BaseModel):
     titre: str
     description: str
-    prix: float
+    prix: int
     categorie: str
     langue: str
     domaine: str
@@ -107,14 +107,14 @@ class DocumentResponse(BaseModel):
     id: int
     titre: str
     description: str
-    prix: float
+    prix: int
     categorie: str
     langue: str
     domaine: str
     pdf_path: str
     couverture_path: str
     vendeur_id: int
-    achats: int   # ✅ important
+    achats: int   #  important
     date_publication: Optional[datetime] = None  # ✅ ajouté
 
     class Config:
@@ -125,7 +125,7 @@ class DocumentResponse(BaseModel):
 
 class WalletBase(BaseModel):
     vendeur_id: int
-    solde: float = 0.0
+    solde: int = 0
 
 class WalletCreate(WalletBase):
     pass
@@ -141,7 +141,7 @@ class TransactionBase(BaseModel):
     wallet_id: int | None = None
     acheteur_id: Optional[int] 
     type: str   # "paiement" ou "retrait"
-    montant: float
+    montant: int
     document_id: int | None = None
     document_nom: str | None = None
     status: str = "success"
@@ -152,7 +152,7 @@ class TransactionCreate(TransactionBase):
 
 
 class AchatCreate(BaseModel):
-    montant: float
+    montant: int
     document_id: int
     document_nom: str
     reference: str
@@ -171,7 +171,7 @@ class WalletWithTransactions(Wallet):
 class RetraitCreate(BaseModel):
     wallet_id: int
     type: str
-    montant: float
+    montant: int
     status: str
     reference: str
 
@@ -179,9 +179,9 @@ class RetraitResponse(BaseModel):
     id: int
     wallet_id: int
     type: str
-    montant: float
+    montant: int
     status: str
     reference: Optional[str]
     date_transaction: datetime
     message: str
-    solde_restant: float
+    solde_restant: int

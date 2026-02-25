@@ -1,7 +1,7 @@
 class PdfData {
   final int? id;
   final String title;
-  final double price;
+  final int price;
   String? image;       // chemin local OU URL
   final String domain;
   final String language;
@@ -52,7 +52,7 @@ class PdfData {
     return PdfData(
       id: json["id"],
       title: json["titre"] ?? "",
-      price: double.tryParse(json["prix"].toString()) ?? 0.0,
+      price: int.tryParse(json["prix"].toString()) ?? 0,
       image: json["couverture_path"],
       domain: json["domaine"] ?? "",
       language: json["langue"] ?? "",
@@ -124,7 +124,7 @@ class PdfData {
     return PdfData(
       id: map["id"],
       title: map["title"] ?? "",
-      price: (map["price"] is num) ? (map["price"] as num).toDouble() : 0.0,
+      price: (map["price"] is num) ? (map["price"] as num).toInt() : 0,
       image: map["imagePath"],
       domain: map["domain"] ?? "",
       language: map["language"] ?? "",
@@ -156,7 +156,7 @@ class PdfData {
   PdfData copyWith({
     int? id,
     String? title,
-    double? price,
+    int? price,
     String? pdfPath,
     String? image,
     int? achats,

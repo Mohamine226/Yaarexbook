@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:daaga/PageConnexion.dart';
 import 'package:flutter/material.dart';
 import 'package:daaga/CodeConfirme.dart';
 import 'package:daaga/widget/Input.dart';
@@ -47,30 +48,30 @@ class _InscritConfirmeState extends State<InscritConfirme> {
         "pays": paysController.text,
         "profession": professionController.text,
         "password": passwordController.text,
-        "role": "Acheteur",
+        "role": "Lecteur",
       };
 
       try {
         // 🔹 Appel API /pre_register
-        final result = await ApiService.preRegister(body);
+        final result = await ApiService.register(body);
 
-        // 🔹 Afficher le code dans la console Flutter (debug)
-        print("✅ Code généré: ${result["code"]}");
+        //  Afficher le code dans la console Flutter (debug)
+        print(" Code généré: ${result["code"]}");
 
         // 🔹 Naviguer vers CodeConfirme
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => CodeConfirme(
-              identifier: widget.email,
-              nom: widget.nom,
-              prenom: widget.prenom,
-              telephone: widget.telephone,
-              pays: paysController.text,
-              profession: professionController.text,
-              password: passwordController.text,
-              role: "Acheteur",
-            ),
+            builder: (context) => PageConnexion(),   //CodeConfirme(
+             // identifier: widget.email,
+             // nom: widget.nom,
+             // prenom: widget.prenom,
+             // telephone: widget.telephone,
+             // pays: paysController.text,
+             // profession: professionController.text,
+             // password: passwordController.text,
+             // role: "Lecteur",
+            //),
           ),
         );
       } catch (e) {

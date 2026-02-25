@@ -242,5 +242,20 @@ class ApiService {
     }
   }
 
+  //inscription (POST /pre_register)
+  static Future<Map<String, dynamic>> register(Map<String, dynamic> body) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/auth/admin"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception("Erreur pré-inscription: ${response.body}");
+    }
+  }
+
 
 }

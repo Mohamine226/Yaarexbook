@@ -1,7 +1,7 @@
 import 'package:daaga/InscritConfirme.dart';
 import 'package:flutter/material.dart';
 import 'package:daaga/widget/Input.dart';
-import 'package:country_calling_code_picker/picker.dart'; // ✅ garde uniquement celui-ci
+import 'package:country_calling_code_picker/picker.dart'; 
 
 class PageInscription extends StatefulWidget {
   const PageInscription({super.key});

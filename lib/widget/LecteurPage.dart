@@ -188,15 +188,15 @@ class _LecteurPageState extends State<LecteurPage> {
                 }
               },
             ),
-            IconButton(
-              icon: Image.asset("assets/images/mougli.png", height: 30),
-              tooltip: "Ouvrir MougliIA",
-              onPressed: MediaQuery.of(context).orientation == Orientation.portrait
-                  ? () {
-                _mougliKey.currentState?.togglePanel();
-              }
-                  : null, // 🔹 désactivé si paysage
-            ),
+            //IconButton(
+             // icon: Image.asset("assets/images/mougli.png", height: 30),
+            //  tooltip: "Ouvrir MougliIA",
+            //  onPressed: MediaQuery.of(context).orientation == Orientation.portrait
+            //      ? () {
+            //    _mougliKey.currentState?.togglePanel();
+            //  }
+            //      : null, // 🔹 désactivé si paysage
+           // ),
           ],
         )
             : null,

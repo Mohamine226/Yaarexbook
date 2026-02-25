@@ -22,7 +22,7 @@ class PagePaiement extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Paiement")),
+      appBar: AppBar(title: const Text("Obtention")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -36,13 +36,13 @@ class PagePaiement extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              "Prix : ${livre.price.toStringAsFixed(2)} F",
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.green,
-              ),
-            ),
+            //Text(
+             // "Prix : ${livre.price} FCFA",
+             // style: const TextStyle(
+             //   fontSize: 18,
+              //  color: Colors.green,
+             // ),
+           // ),
             const Spacer(),
             Center(
               child: ElevatedButton(
@@ -88,36 +88,35 @@ class PagePaiement extends StatelessWidget {
                       await box.put('livres', updated);
 
 
+                      //  Ensuite seulement, envoyer la transaction vers ton API FastAPI
+                      //final transactionJson = {
+                      //  "montant": livre.price,
+                      //  "document_id": livre.id,
+                      //  "document_nom": livre.title,
+                      //  "reference": "PAY-${DateTime.now().millisecondsSinceEpoch}",
+                      //  "acheteur_id": userId,
+                      //};
 
-                      // 🔹 Ensuite seulement, envoyer la transaction vers ton API FastAPI
-                      final transactionJson = {
-                        "montant": livre.price,
-                        "document_id": livre.id,
-                        "document_nom": livre.title,
-                        "reference": "PAY-${DateTime.now().millisecondsSinceEpoch}",
-                        "acheteur_id": userId,
-                      };
+                      //final response = await http.post(
+                       // Uri.parse("http://10.17.104.142:8000/wallets/achats/"),
+                       // headers: {"Content-Type": "application/json"},
+                      //  body: jsonEncode(transactionJson),
+                      //);
 
-                      final response = await http.post(
-                        Uri.parse("http://10.17.104.142:8000/wallets/achats/"),
-                        headers: {"Content-Type": "application/json"},
-                        body: jsonEncode(transactionJson),
-                      );
-
-                      if (response.statusCode >= 200 && response.statusCode < 300) {
-                        debugPrint("Transaction enregistrée: ${response.body}");
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Paiement validé ✅")),
-                        );
-                      } else {
-                        debugPrint("Erreur API: ${response.body}");
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Erreur lors du paiement ❌")),
-                        );
-                      }
+                      //if (response.statusCode >= 200 && response.statusCode < 300) {
+                      //  debugPrint("Transaction enregistrée: ${response.body}");
+                       // ScaffoldMessenger.of(context).showSnackBar(
+                       //   const SnackBar(content: Text("Paiement validé ")),
+                       // );
+                      //} else {
+                       //   debugPrint("Erreur API: ${response.body}");
+                        //  ScaffoldMessenger.of(context).showSnackBar(
+                         // const SnackBar(content: Text("Erreur lors du paiement ")),
+                       // );
+                      //}
 
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Livre ajouté dans votre bibliothèque ✅")),
+                        const SnackBar(content: Text("Livre ajouté dans votre bibliothèque ")),
                       );
 
                       Navigator.pop(context, true);
@@ -126,11 +125,11 @@ class PagePaiement extends StatelessWidget {
                     }
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Erreur lors du paiement ❌")),
+                      const SnackBar(content: Text("Erreur lors du paiement ")),
                     );
                   }
                 },
-                child: const Text("Valider le paiement"),
+                child: const Text("Ajouter dans la bibliothèque"),
               ),
             ),
           ],

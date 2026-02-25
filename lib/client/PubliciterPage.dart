@@ -135,7 +135,7 @@ class _PubliciterPageState extends State<PubliciterPage> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       child: Text(
-                        "${livre.price} F",
+                        "${livre.price} FCFA",
                         style: const TextStyle(
                             color: Colors.green,
                             fontWeight: FontWeight.w600),

@@ -31,7 +31,7 @@ class _OublierPageState extends State<OublierPage> {
     try {
       // 🔹 Appel API pour demander un reset (forgot-password)
       final response = await http.post(
-        Uri.parse("http://10.17.104.142:8000/users/forgot-password"),
+        Uri.parse("https://calm-imagination-production-5d97.up.railway.app/users/forgot-password"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"identifier": identifier}),
       );

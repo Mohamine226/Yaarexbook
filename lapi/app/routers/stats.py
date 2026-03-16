@@ -26,7 +26,7 @@ async def get_statistiques_globales(db: AsyncSession = Depends(get_db)):
     # 🔹 Comptages réels depuis la base
     total_utilisateurs = (await db.execute(select(func.count()).select_from(User))).scalar()
     total_vendeurs = (await db.execute(select(func.count()).select_from(User).where(User.role == "vendeur"))).scalar()
-    total_acheteurs = (await db.execute(select(func.count()).select_from(User).where(User.role == "acheteur"))).scalar()
+    total_acheteurs = (await db.execute(select(func.count()).select_from(User).where(User.role == "Lecteur"))).scalar()
     total_documents = (await db.execute(select(func.count()).select_from(Document))).scalar()
 
     # 🔹 Statistiques achats (via Bibliotheque)

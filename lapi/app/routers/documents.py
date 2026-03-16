@@ -9,11 +9,18 @@ from pydantic import BaseModel
 from pathlib import Path
 import uuid
 import unicodedata, re
+import os
+from fastapi import UploadFile, File, Form, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from supabase import create_client, Client # type: ignore
+
 
 router = APIRouter(
     prefix="/documents",
     tags=["documents"]
 )
+
+BASE_URL = os.getenv("BASE_URL")
 
 class PaginatedDocuments(BaseModel):
     items: List[DocumentResponse]
@@ -21,6 +28,16 @@ class PaginatedDocuments(BaseModel):
 
 
 # 🔹 Publier un document avec upload de fichiers
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def clean_filename(filename: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", filename)
+    no_accents = "".join([c for c in nfkd if not unicodedata.combining(c)])
+    return re.sub(r"[^a-zA-Z0-9._-]", "_", no_accents)
+
 @router.post("/users/{vendeur_id}/upload", response_model=DocumentResponse)
 async def publier_document_upload(
     vendeur_id: int,
@@ -34,33 +51,23 @@ async def publier_document_upload(
     couverture: UploadFile = File(...),
     db: AsyncSession = Depends(get_db)
 ):
-    def clean_filename(filename: str) -> str:
-        nfkd = unicodedata.normalize("NFKD", filename)
-        no_accents = "".join([c for c in nfkd if not unicodedata.combining(c)])
-        return re.sub(r"[^a-zA-Z0-9._-]", "_", no_accents)
-
-    UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
-    UPLOAD_DIR.mkdir(exist_ok=True)
-
     pdf_name = f"{uuid.uuid4()}_{clean_filename(pdf.filename)}"
     cover_name = f"{uuid.uuid4()}_{clean_filename(couverture.filename)}"
 
-    pdf_path = UPLOAD_DIR / pdf_name
-    cover_path = UPLOAD_DIR / cover_name
+    # 🔹 Upload vers Supabase
+    pdf_bytes = await pdf.read()
+    cover_bytes = await couverture.read()
 
-    with open(pdf_path, "wb") as f:
-        f.write(await pdf.read())
-    with open(cover_path, "wb") as f:
-        f.write(await couverture.read())
+    supabase.storage.from_("uploads").upload(pdf_name, pdf_bytes)
+    supabase.storage.from_("uploads").upload(cover_name, cover_bytes)
 
-    pdf_url = f"http://10.17.104.142:8000/uploads/{pdf_name}"
-    cover_url = f"http://10.17.104.142:8000/uploads/{cover_name}"
+    pdf_url = supabase.storage.from_("uploads").get_public_url(pdf_name)
+    cover_url = supabase.storage.from_("uploads").get_public_url(cover_name)
 
     nouveau_doc = Document(
         titre=titre,
         description=description,
         prix=prix,
-
         categorie=categorie,
         langue=langue,
         domaine=domaine,

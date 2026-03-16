@@ -38,7 +38,7 @@ class _VendeurState extends State<Vendeur> {
   int nbLivresPublies = 0;
   int nbDocumentsVendus = 0;
   int documentsAchetes = 0;
-  double totalGagne = 0;
+  int totalGagne = 0;
   bool isLoading = true;
 
   @override
@@ -58,8 +58,8 @@ class _VendeurState extends State<Vendeur> {
           nbDocumentsVendus = cached['nbDocumentsVendus'] ?? 0;
           documentsAchetes = cached['nbLivresAchetes'] ?? 0;
           totalGagne = (cached['totalGagne'] is num)
-              ? (cached['totalGagne'] as num).toDouble()
-              : 0.0;
+              ? (cached['totalGagne'] as num).toInt()
+              : 0;
           isLoading = false;
         });
       }
@@ -73,8 +73,8 @@ class _VendeurState extends State<Vendeur> {
       final nbVendus = ventes["nombre_ventes"] ?? 0;
       final nbAchetes = achetes.length;
       final solde = (gains["solde_disponible"] is num)
-          ? (gains["solde_disponible"] as num).toDouble()
-          : 0.0;
+          ? (gains["solde_disponible"] as num).toInt()
+          : 0;
 
       setState(() {
         nbLivresPublies = nbPublies;
@@ -103,9 +103,10 @@ class _VendeurState extends State<Vendeur> {
         final nbVendus = ventesList.length;
         final nbAchetes = achetesLocal.length;
 
-        final solde = gainsList.fold<double>(
-          0.0,
-              (sum, doc) => sum + (doc.price ?? 0.0),
+        // Ici on force le solde en entier
+        final solde = gainsList.fold<int>(
+          0,
+              (sum, doc) => sum + ((doc.price ?? 0).toInt()),
         );
 
         setState(() {
@@ -146,7 +147,7 @@ class _VendeurState extends State<Vendeur> {
             child: ListTile(
               leading: const Icon(Icons.account_balance_wallet, color: Colors.green),
               title: const Text("Solde disponible"),
-              subtitle: Text("$totalGagne FCFA"),
+              subtitle: Text("$totalGagne FCFA",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -266,7 +267,7 @@ class _VendeurState extends State<Vendeur> {
                   onTap: () async {
                     try {
                       final tokenAvant = await ApiService.getToken();
-                      print("📦 Token récupéré avant logout: $tokenAvant");
+                      print(" Token récupéré avant logout: $tokenAvant");
 
                       String deviceType;
                       if (Platform.isAndroid || Platform.isIOS) {
@@ -281,7 +282,7 @@ class _VendeurState extends State<Vendeur> {
                         userId: Utilisateur.id,
                         deviceType: deviceType,
                       );
-                      print("✅ Réponse serveur logout: $response");
+                      print(" Réponse serveur logout: $response");
 
                       if (response['status'] == "success") {
                         final prefs = await SharedPreferences.getInstance();

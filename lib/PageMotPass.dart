@@ -38,7 +38,7 @@ class _PageMotPasseState extends State<PageMotPasse> {
       });
 
       final response = await http.put(
-        Uri.parse("http://127.0.0.1:8000/auth/set-password"),
+        Uri.parse("https://calm-imagination-production-5d97.up.railway.app/auth/set-password"),
         headers: {"Content-Type": "application/json"},
         body: body,
       );

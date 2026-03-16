@@ -58,7 +58,7 @@ class _PageVerificationState extends State<PageVerification> {
     setState(() => _isResending = true);
     try {
       final response = await http.post(
-        Uri.parse("http://10.17.104.142:8000/users/forgot-password"),
+        Uri.parse("https://calm-imagination-production-5d97.up.railway.app/users/forgot-password"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"identifier": widget.identifier}),
       );
@@ -96,7 +96,7 @@ class _PageVerificationState extends State<PageVerification> {
 
     try {
       final verifyResponse = await http.post(
-        Uri.parse("http://10.17.104.142:8000/auth/verify-reset-code"),
+        Uri.parse("http://lapi-api-production-1697.up.railway.app/auth/verify-reset-code"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "identifier": widget.identifier,
@@ -109,7 +109,7 @@ class _PageVerificationState extends State<PageVerification> {
 
         if (verifyData["status"] == "success") {
           final resetResponse = await http.put(
-            Uri.parse("http://10.17.104.142:8000/auth/set-password"),
+            Uri.parse("http://lapi-api-production-1697.up.railway.app/auth/set-password"),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
               "identifier": widget.identifier,

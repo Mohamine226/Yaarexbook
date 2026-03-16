@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: daaga_db
+    restart: always
+    environment:
+      POSTGRES_USER: mohamine
+      POSTGRES_PASSWORD: 6414Gnam1
+      POSTGRES_DB: daagabase
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+
+  api:
+    build: .
+    container_name: daaga
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgresql://postgres:EWhhbJfkHnFAhroAhPnQFyGulFxWdyEF@postgres.railway.internal:5432/railway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./app/uploads:/app/uploads
+
+
+volumes:
+  postgres_data:

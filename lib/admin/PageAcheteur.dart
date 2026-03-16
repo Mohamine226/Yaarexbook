@@ -36,7 +36,7 @@ class _PageAcheteurState extends State<PageAcheteur> {
   Future<void> _chargerUtilisateurs() async {
     setState(() => isLoading = true);
 
-    final uri = Uri.parse("http://10.17.104.142:8000/users/").replace(
+    final uri = Uri.parse("http://calm-imagination-production-5d97.up.railway.app/users/").replace(
       queryParameters: {
         'skip': '$skip',
         'limit': '$limit',
@@ -50,7 +50,7 @@ class _PageAcheteurState extends State<PageAcheteur> {
 
       final newUsers = data
           .cast<Map<String, dynamic>>()
-          .where((user) => user["role"] == "acheteur" || user["role"] == "admin")
+          .where((user) => user["role"] == "Lecteur" || user["role"] == "admin")
           .toList();
 
       newUsers.sort((a, b) => b["id"].compareTo(a["id"]));
@@ -70,7 +70,7 @@ class _PageAcheteurState extends State<PageAcheteur> {
   }
 
   Future<void> supprimerUtilisateur(int id) async {
-    final response = await http.delete(Uri.parse("http://10.17.104.142:8000/users/$id"));
+    final response = await http.delete(Uri.parse("https://calm-imagination-production-5d97.up.railway.app/users/$id"));
 
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(

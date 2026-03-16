@@ -1,6 +1,10 @@
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
+from app.database import Base
+
+import os
+from sqlalchemy import create_engine
 
 # Importer ton Base centralisé
 from app.database import Base  
@@ -11,8 +15,18 @@ from app.models.document import Document
 from app.models.bibliotheque import Bibliotheque
 from app.models.transaction import Transaction, Wallet
 
+
+# Charger la variable d'environnement
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set")
+
 # Alembic Config
 config = context.config
+
+# Injecter l'URL dans la config Alembic
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
+
 
 # Logging
 if config.config_file_name is not None:

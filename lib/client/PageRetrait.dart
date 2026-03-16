@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class PageRetrait extends StatefulWidget {
-  final double solde; // 🔹 solde transmis depuis Vendeur
+  final int solde; // 🔹 solde transmis depuis Vendeur
 
   const PageRetrait({super.key, required this.solde});
 
@@ -10,7 +10,7 @@ class PageRetrait extends StatefulWidget {
 }
 
 class _PageRetraitState extends State<PageRetrait> {
-  late double solde; // 🔹 solde actuel
+  late int solde; // 🔹 solde actuel
 
   final List<String> modes = [
     "Orange Money",
@@ -23,7 +23,7 @@ class _PageRetraitState extends State<PageRetrait> {
   @override
   void initState() {
     super.initState();
-    solde = widget.solde; // ✅ initialisation avec le solde reçu
+    solde = widget.solde; //  initialisation avec le solde reçu
   }
 
   @override
@@ -56,7 +56,7 @@ class _PageRetraitState extends State<PageRetrait> {
                   radius: 100, // taille du cercle
                   backgroundColor: Colors.green.shade100,
                   child: Text(
-                    "${solde.toStringAsFixed(2)} FCFA",
+                    "${solde} FCFA",
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,

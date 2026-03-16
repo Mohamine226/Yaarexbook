@@ -58,6 +58,8 @@ class _InscritConfirmeState extends State<InscritConfirme> {
         //  Afficher le code dans la console Flutter (debug)
         print(" Code généré: ${result["code"]}");
 
+
+
         // 🔹 Naviguer vers CodeConfirme
         Navigator.push(
           context,
@@ -74,9 +76,10 @@ class _InscritConfirmeState extends State<InscritConfirme> {
             //),
           ),
         );
+
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Erreur lors de l'inscription ❌")),
+          const SnackBar(content: Text("Erreur lors de l'inscription")),
         );
       }
     }

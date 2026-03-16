@@ -1,6 +1,6 @@
 from fastapi import FastAPI # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
-from app.routers import auth, users, documents, stats, dates, translate, explain, transactions
+from app.routers import auth, users, documents, stats, dates, translate, transactions
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles # type: ignore
 from app.database import engine, Base
@@ -28,12 +28,11 @@ app.include_router(documents.router)  # /documents/... (si défini dans document
 app.include_router(stats.router)      # /stats/...
 app.include_router(dates.router)
 app.include_router(translate.router)
-app.include_router(explain.router)
 app.include_router(transactions.router)
 
 
-UPLOAD_DIR = Path(__file__).parent / "uploads"   # 🔹 reste dans app/
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+#UPLOAD_DIR = Path(__file__).parent / "uploads"   # 🔹 reste dans app/
+#app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 @app.get("/")
 async def read_root():

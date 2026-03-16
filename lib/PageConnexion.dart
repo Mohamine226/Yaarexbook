@@ -47,7 +47,7 @@ class _PageConnexionState extends State<PageConnexion> {
 
     // 🔹 Vérifie auprès du backend FastAPI
     final response = await http.post(
-      Uri.parse("http://10.17.104.142:8000/auth/login"),
+      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/auth/login"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "identifier": mailController.text.trim(),

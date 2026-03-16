@@ -23,7 +23,7 @@ class _HistoriquePage1State extends State<HistoriquePage1> {
   // 🔹 Fonction pour récupérer les transactions de l'acheteur
   Future<List<dynamic>> fetchTransactions(int userId, {int skip = 0, int limit = 10}) async {
     final response = await http.get(
-      Uri.parse("http://10.17.104.142:8000/wallets/achats/$userId?skip=$skip&limit=$limit"),
+      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/wallets/achats/$userId?skip=$skip&limit=$limit"),
     );
 
     if (response.statusCode == 200) {

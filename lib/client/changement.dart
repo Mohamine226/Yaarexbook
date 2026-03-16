@@ -46,7 +46,7 @@ class _ChangementState extends State<Changement> {
     setState(() => isLoading = true);
 
     final response = await http.put(
-      Uri.parse("http://10.17.104.142:8000/users/${Utilisateur.id}/change-role"),
+      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/users/${Utilisateur.id}/change-role"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "new_role": "vendeur",

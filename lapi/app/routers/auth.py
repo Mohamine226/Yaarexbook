@@ -69,7 +69,7 @@ async def authenticate_user(db, email: str, password: str):
 # -----------------------------
 # Endpoints
 # -----------------------------
-@router.post("/admin")
+@router.post("/creer/unadmin")
 async def register(user: UserCreateAdmin, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == user.email))
     exists = result.scalars().first()
@@ -102,6 +102,42 @@ async def register(user: UserCreateAdmin, db: AsyncSession = Depends(get_db)):
             "pays": db_user.pays,
             "profession": db_user.profession,
             "role": db_user.role,
+        }
+    }
+
+@router.post("/admin")
+async def register(user: UserCreateAdmin, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == user.email))
+    exists = result.scalars().first()
+    if exists:
+        return {"status": "error", "message": "Email déjà utilisé"}
+
+    db_user = User(
+        nom=user.nom,
+        prenom=user.prenom,
+        email=user.email,
+        telephone=user.telephone,
+        pays=user.pays,
+        profession=user.profession,
+        password=hash_password(user.password),
+        #role= user.role,
+    )
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+
+    return {
+        "status": "success",
+        "message": "Inscription réussie",
+        "user": {
+            "id": db_user.id,
+            "nom": db_user.nom,
+            "prenom": db_user.prenom,
+            "email": db_user.email,
+            "telephone": db_user.telephone,
+            "pays": db_user.pays,
+            "profession": db_user.profession,
+            #"role": db_user.role,
         }
     }
 

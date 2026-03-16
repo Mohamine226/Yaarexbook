@@ -16,7 +16,7 @@ class FetchDocumentsResult {
 
 class LivreManager {
   // ✅ Définir l’URL de base pour éviter l’erreur sur $baseUrl
-  static const String baseUrl = "http://10.17.104.142:8000/documents";
+  static const String baseUrl = "https://calm-imagination-production-5d97.up.railway.app/documents";
 
   static final Map<String, List<DomainData>> domainesParCategorie = {
     "Roman": [],
@@ -502,7 +502,7 @@ class LivreManager {
   // Desativation
   static Future<bool> desactiverDocumentAPI(int id) async {
     final response = await http.put(
-      Uri.parse("http://10.17.104.142:8000/$id/disable"),
+      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/$id/disable"),
     );
     return response.statusCode == 200;
   }
@@ -553,7 +553,7 @@ class LivreManager {
   // 📌 Récupérer le solde d’un utilisateur via son user_id
   static Future<Map<String, dynamic>> getSolde(int userId) async {
     final response = await http.get(
-      Uri.parse("http://10.17.104.142:8000/wallets/$userId/solde"),
+      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/wallets/$userId/solde"),
     );
 
     if (response.statusCode == 200) {
@@ -566,7 +566,7 @@ class LivreManager {
 // 📌 Récupérer le nombre de ventes d’un utilisateur (vendeur) via son user_id
   static Future<Map<String, dynamic>> getNombreVentesParUser(int userId) async {
     final response = await http.get(
-      Uri.parse("http://10.17.104.142:8000/wallets/$userId/ventes"),
+      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/wallets/$userId/ventes"),
     );
 
     if (response.statusCode == 200) {

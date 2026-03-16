@@ -36,7 +36,7 @@ class _DetailState extends State<Detail> {
       }
 
       final response = await http.get(
-        Uri.parse("http://10.17.104.142:8000/dates/users/$vendeurId"),
+        Uri.parse("https://calm-imagination-production-5d97.up.railway.app/dates/users/$vendeurId"),
       );
 
       if (response.statusCode == 200) {

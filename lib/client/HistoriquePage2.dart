@@ -30,12 +30,12 @@ class _HistoriquePage2State extends State<HistoriquePage2> {
       }) async {
     // Appel API pour les achats
     final achatsResponse = await http.get(
-      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/wallets/achats/$userId?skip=$skip&limit=$limit"),
+      Uri.parse("https://daaga-production.up.railway.app/wallets/achats/$userId?skip=$skip&limit=$limit"),
     );
 
     // Appel API pour les transactions du wallet
     final walletResponse = await http.get(
-      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/wallets/$walletId/retrait?skip=$skip&limit=$limit"),
+      Uri.parse("https://daaga-production.up.railway.app/wallets/$walletId/retrait?skip=$skip&limit=$limit"),
     );
 
     if (achatsResponse.statusCode == 200 && walletResponse.statusCode == 200) {

@@ -82,8 +82,8 @@ class _MyAppState extends State<MyApp> {
         _screens = [
           HomePage(userId: userId!, repository: widget.repository),
           Categorie(userId: userId!, repository: widget.repository),
-          Fichiers(repository: widget.repository), // ✅ correction
-          Compte(repository: widget.repository),   // ✅ ajout
+          Fichiers(repository: widget.repository), //  correction
+          Compte(repository: widget.repository),   //  ajout
         ];
         isLoading = false;
       });
@@ -93,7 +93,7 @@ class _MyAppState extends State<MyApp> {
     //  Sinon, vérifier le token auprès du backend
     if (widget.token != null && widget.token!.isNotEmpty) {
       final response = await http.get(
-        Uri.parse("http://10.17.104.142:8000/auth/me"),
+        Uri.parse("http://daaga-production.up.railway.app/auth/me"),
         headers: {"Authorization": "Bearer ${widget.token}"},
       );
 

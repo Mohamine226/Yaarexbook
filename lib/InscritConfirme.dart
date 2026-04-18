@@ -77,6 +77,10 @@ class _InscritConfirmeState extends State<InscritConfirme> {
           ),
         );
 
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Inscription validée! Connectez-vous")),
+        );
+
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Erreur lors de l'inscription")),

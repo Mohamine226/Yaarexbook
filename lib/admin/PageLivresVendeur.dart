@@ -38,7 +38,7 @@ class _PageLivresVendeurState extends State<PageLivresVendeur> {
   Future<void> _chargerLivres() async {
     setState(() => isLoading = true);
 
-    final uri = Uri.parse("https://calm-imagination-production-5d97.up.railway.app/documents/vendeur").replace(
+    final uri = Uri.parse("https://daaga-production.up.railway.app/documents/vendeur").replace(
       queryParameters: {
         'vendeur_id': '${widget.vendeurId}',
         'skip': '$skip',

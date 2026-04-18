@@ -103,31 +103,30 @@ class _Parametre2PageState extends State<Parametre2Page> {
         padding: const EdgeInsets.all(16),
         children: [
           // 🔹 Compte
-          Card(
-            elevation: 3,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: Row(
-                    children: [
-                      Icon(Icons.account_circle, color: Colors.black54),
-                      SizedBox(width: 8),
-                      Text(
-                        "Compte",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
+                const Row(
+                  children: [
+                    Icon(Icons.account_circle, color: Colors.black54),
+                    SizedBox(width: 8),
+                    Text(
+                      "Compte",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 const Divider(height: 1, color: Colors.black12),
-
                 ...infos.entries.map((entry) {
                   final key = entry.key;
                   final value = entry.value;
@@ -135,15 +134,12 @@ class _Parametre2PageState extends State<Parametre2Page> {
 
                   return ListTile(
                     leading: Icon(icones[key], color: Colors.black54),
-                    title: Text(key, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text(key,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text(value.isNotEmpty ? value : "Non renseigné"),
                     trailing: isLocked
                         ? const Icon(Icons.lock, color: Colors.grey)
-                        : null
-                        //: IconButton(
-                     // icon: const Icon(Icons.edit, color: Colors.grey),
-                    //  onPressed: () => _editInfo(key),
-                   // ),
+                        : null,
                   );
                 }).toList(),
               ],
@@ -153,110 +149,87 @@ class _Parametre2PageState extends State<Parametre2Page> {
           const SizedBox(height: 20),
 
           // 🔹 Sécurité
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ChangePasswordPage(
-                      userId: Utilisateur.id.toString(), // 🔹 passe l’ID utilisateur
-                    ),
+          ListTile(
+            leading: const Icon(Icons.lock, color: Colors.black54),
+            title: const Text("Sécurité"),
+            subtitle: const Text("Changer mot de passe, activer 2FA"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChangePasswordPage(
+                    userId: Utilisateur.id.toString(),
                   ),
-                );
-              },
-              child: const ListTile(
-                leading: Icon(Icons.lock, color: Colors.black54),
-                title: Text("Sécurité"),
-                subtitle: Text("Changer mot de passe, activer 2FA"),
-              ),
-            ),
+                ),
+              );
+            },
           ),
-
 
           const SizedBox(height: 16),
 
           // 🔹 Langue
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: const Icon(Icons.language, color: Colors.black54),
-              title: const Text("Langue"),
-              subtitle: DropdownButton<String>(
-                value: langueChoisie,
-                items: langues.map((langue) {
-                  return DropdownMenuItem(
-                    value: langue,
-                    child: Text(langue),
-                  );
-                }).toList(),
-                onChanged: (nouvelleLangue) {
-                  setState(() {
-                    langueChoisie = nouvelleLangue!;
-                  });
-                },
-              ),
+          ListTile(
+            leading: const Icon(Icons.language, color: Colors.black54),
+            title: const Text("Langue"),
+            subtitle: DropdownButton<String>(
+              value: langueChoisie,
+              items: langues.map((langue) {
+                return DropdownMenuItem(
+                  value: langue,
+                  child: Text(langue),
+                );
+              }).toList(),
+              onChanged: (nouvelleLangue) {
+                setState(() {
+                  langueChoisie = nouvelleLangue!;
+                });
+              },
             ),
           ),
 
           const SizedBox(height: 16),
 
           // 🔹 Aide
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: const Icon(Icons.help, color: Colors.black54),
-              title: const Text("Aide"),
-              subtitle: const Text("Envoyer un feedback ou consulter l'aide"),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AidePage()), // 🔹 ouvre la page interne
-                );
-              },
-            ),
+          ListTile(
+            leading: const Icon(Icons.help, color: Colors.black54),
+            title: const Text("Aide"),
+            subtitle: const Text("Envoyer un feedback ou consulter l'aide"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AidePage()),
+              );
+            },
           ),
 
           const SizedBox(height: 16),
 
           // 🔹 Mises à jour
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: const Icon(Icons.system_update, color: Colors.black54),
-              title: const Text("Mises à jour"),
-              subtitle: const Text("Vérifier les mises à jour disponibles"),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MisesAJourPage()), // 🔹 ouvre la page interne
-                );
-              },
-            ),
+          ListTile(
+            leading: const Icon(Icons.system_update, color: Colors.black54),
+            title: const Text("Mises à jour"),
+            subtitle: const Text("Vérifier les mises à jour disponibles"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MisesAJourPage()),
+              );
+            },
           ),
 
           const SizedBox(height: 16),
 
           // 🔹 À propos
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: const Icon(Icons.info, color: Colors.black54),
-              title: const Text("À propos"),
-              subtitle: const Text("Informations sur l'application Daaga"),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const PageAPropos2()),
-                );
-              },
-            ),
+          ListTile(
+            leading: const Icon(Icons.info, color: Colors.black54),
+            title: const Text("À propos"),
+            subtitle: const Text("Informations sur l'application MyEbook"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PageAPropos2()),
+              );
+            },
           ),
         ],
       ),

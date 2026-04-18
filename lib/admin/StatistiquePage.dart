@@ -31,7 +31,7 @@ class _StatistiquePageState extends State<StatistiquePage> {
   Future<void> fetchGlobalStats() async {
     try {
       final response = await http.get(
-        Uri.parse("https://calm-imagination-production-5d97.up.railway.app/api/statistiques/global"),
+        Uri.parse("https://daaga-production.up.railway.app/api/statistiques/global"),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

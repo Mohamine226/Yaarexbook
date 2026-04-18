@@ -36,7 +36,7 @@ class _PageAcheteurState extends State<PageAcheteur> {
   Future<void> _chargerUtilisateurs() async {
     setState(() => isLoading = true);
 
-    final uri = Uri.parse("http://calm-imagination-production-5d97.up.railway.app/users/").replace(
+    final uri = Uri.parse("http://daaga-production.up.railway.app/users/").replace(
       queryParameters: {
         'skip': '$skip',
         'limit': '$limit',
@@ -70,7 +70,7 @@ class _PageAcheteurState extends State<PageAcheteur> {
   }
 
   Future<void> supprimerUtilisateur(int id) async {
-    final response = await http.delete(Uri.parse("https://calm-imagination-production-5d97.up.railway.app/users/$id"));
+    final response = await http.delete(Uri.parse("https://daaga-production.up.railway.app/users/$id"));
 
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(

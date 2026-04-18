@@ -46,7 +46,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     try {
       final response = await http.post(
         Uri.parse(
-          "https://calm-imagination-production-5d97.up.railway.app/users/change-password"
+          "https://daaga-production.up.railway.app/users/change-password"
               "?user_id=${widget.userId}&old_password=$oldPassword&new_password=$newPassword",
         ),
       );

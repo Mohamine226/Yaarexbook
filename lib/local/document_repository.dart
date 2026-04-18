@@ -23,7 +23,7 @@ class DocumentRepository {
   // READ
   // -------------------------
 
-  /// 📂 Tous les documents
+  /// Tous les documents
   Future<List<PdfData>> getAllDocuments({int limit = 20}) async {
     final maps = await db.query(
       'documents',
@@ -33,7 +33,7 @@ class DocumentRepository {
     return maps.map((e) => PdfData.fromMap(e)).toList();
   }
 
-  /// 📚 Bibliothèque utilisateur (documents achetés)
+  ///  Bibliothèque utilisateur (documents achetés)
   Future<List<PdfData>> getBibliotheque(int userId) async {
     final maps = await db.query(
       'documents',
@@ -72,8 +72,8 @@ class DocumentRepository {
     return maps.map((e) => PdfData.fromMap(e)).toList();
   }
 
-  /// ⭐ Livres populaires
-  /// ⭐ Livres populaires
+  ///  Livres populaires
+  ///  Livres populaires
   Future<List<PdfData>> getLivresPopulaires({int limit = 10}) async {
     final maps = await db.query(
       'documents',
@@ -85,7 +85,7 @@ class DocumentRepository {
     return maps.map((e) => PdfData.fromMap(e)).toList();
   }
 
-    /// 🏷️ Documents groupés par domaine (cursor-ready)
+    /// 🏷Documents groupés par domaine (cursor-ready)
   Future<Map<String, List<PdfData>>> getDocumentsParDomaines({
     String? search,
     int? cursor, // ✅ identifiant du dernier document lu
@@ -124,7 +124,7 @@ class DocumentRepository {
     return result;
   }
 
-    /// 📂 Documents par catégorie (cursor-ready)
+    ///  Documents par catégorie (cursor-ready)
   Future<List<PdfData>> getDocumentsParCategorie(
     String categorie, {
     String? search,
@@ -161,7 +161,7 @@ class DocumentRepository {
   // DELETE
   // -------------------------
 
-  /// 🗑️ Supprimer un document + ses fichiers locaux
+  /// 🗑 Supprimer un document + ses fichiers locaux
   Future<void> deleteDocument(PdfData doc) async {
     try {
       if (doc.isLocalPdf && doc.pdfPath != null) {
@@ -187,7 +187,7 @@ class DocumentRepository {
   // UPDATE ACHATS
   // -------------------------
 
-  /// ➕ Incrémenter les achats
+  /// Incrémenter les achats
   Future<void> incrementAchats(int documentId) async {
     await db.rawUpdate(
       'UPDATE documents SET achats = achats + 1 WHERE id = ?',
@@ -195,7 +195,7 @@ class DocumentRepository {
     );
   }
 
-  /// 🔁 Associer un document à un utilisateur
+  /// Associer un document à un utilisateur
   Future<void> assignUser(int documentId, int userId) async {
     await db.update(
       'documents',

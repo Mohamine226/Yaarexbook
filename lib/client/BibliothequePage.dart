@@ -45,13 +45,12 @@ class _BibliothequePageState extends State<BibliothequePage> {
 
     List<PdfData> result = [];
 
-    // 🔹 1️⃣ Hive (rapide)
+    // 🔹 1️⃣ Charger cache local (Hive ou SQLite)
     if (cached != null) {
       result = (cached as List)
           .map((json) => PdfData.fromJson(Map<String, dynamic>.from(json)))
           .toList();
     } else {
-      // 🔹 2️⃣ SQLite (offline fiable)
       final local = await widget.repository.getBibliotheque(widget.userId);
       if (local.isNotEmpty) {
         result = local;
@@ -65,7 +64,7 @@ class _BibliothequePageState extends State<BibliothequePage> {
       });
     }
 
-    // 🔹 3️⃣ API (source de vérité)
+    // 🔹 2️⃣ Toujours rafraîchir depuis l’API
     try {
       final apiDocs = await LivreManager.fetchBibliotheque(
         widget.userId,
@@ -78,14 +77,15 @@ class _BibliothequePageState extends State<BibliothequePage> {
           livresFiltres = livres;
         });
 
-        // ✅ Hive seulement (SQLite déjà géré)
+        // ✅ Mise à jour Hive
         await box.put(
           'livres',
           apiDocs.map((l) => l.toJson()).toList(),
         );
       }
-    } catch (_) {
-      // 🔹 4️⃣ fallback silencieux (déjà chargé)
+    } catch (e) {
+      print("Erreur API: $e");
+      // 🔹 fallback silencieux
     }
   }
 

@@ -1,6 +1,8 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
+from app.models import Document
+
 
 
 class ResendCodeRequest(BaseModel):
@@ -111,14 +113,49 @@ class DocumentResponse(BaseModel):
     categorie: str
     langue: str
     domaine: str
-    pdf_path: str
-    couverture_path: str
+    pdfUrl: Optional[str] = None
+    imageUrl: Optional[str] = None
     vendeur_id: int
-    achats: int   #  important
-    date_publication: Optional[datetime] = None  # ✅ ajouté
+    achats: int
+    date_publication: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+class Documentbiblio(BaseModel):
+    id: int
+    titre: str
+    description: str
+    prix: int
+    categorie: str
+    langue: str
+    domaine: str
+    pdfUrl: Optional[str] = None
+    imageUrl: Optional[str] = None
+    vendeur_id: int
+    achats: int
+    date_publication: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm_with_urls(cls, doc: "Document"):
+        return cls(
+            id=doc.id,
+            titre=doc.titre,
+            description=doc.description,
+            prix=doc.prix,
+            categorie=doc.categorie,
+            langue=doc.langue,
+            domaine=doc.domaine,
+            pdfUrl=doc.pdf_path,          # ⚠️ déjà une URL complète
+            imageUrl=doc.couverture_path, # ⚠️ déjà une URL complète
+            vendeur_id=doc.vendeur_id,
+            achats=doc.achats,
+            date_publication=doc.date_publication,
+        )
+
 
 
 # Wallet et Transaction

@@ -46,7 +46,7 @@ class _ChangementState extends State<Changement> {
     setState(() => isLoading = true);
 
     final response = await http.put(
-      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/users/${Utilisateur.id}/change-role"),
+      Uri.parse("https://daaga-production.up.railway.app/users/${Utilisateur.id}/change-role"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "new_role": "vendeur",
@@ -102,7 +102,7 @@ class _ChangementState extends State<Changement> {
         );
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Vous êtes maintenant vendeur, reconnectez-vous")),
+          const SnackBar(content: Text("Vous êtes maintenant vendeur, reconnectez-vous")),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

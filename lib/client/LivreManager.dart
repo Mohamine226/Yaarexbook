@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:daaga/client/Categorie.dart';
 import 'package:daaga/client/PdfData.dart';
@@ -15,8 +16,8 @@ class FetchDocumentsResult {
 }
 
 class LivreManager {
-  // ✅ Définir l’URL de base pour éviter l’erreur sur $baseUrl
-  static const String baseUrl = "https://calm-imagination-production-5d97.up.railway.app/documents";
+  //  Définir l’URL de base pour éviter l’erreur sur $baseUrl
+  static const String baseUrl = "https://daaga-production.up.railway.app/documents";
 
   static final Map<String, List<DomainData>> domainesParCategorie = {
     "Roman": [],
@@ -102,31 +103,45 @@ class LivreManager {
         for (var docJson in data) {
           var doc = PdfData.fromJson(docJson);
 
-          // 🔹 Télécharger PDF et image et mettre à jour les chemins
-          final assets = await FileService.downloadAssetsForDoc(
-            doc.id!,
-            doc.pdfUrl,
-            doc.imageUrl,
-          );
+          // 🔹 Vérifier PDF
+          String? pdfPath;
+          if (doc.pdfPath != null && File(doc.pdfPath!).existsSync()) {
+            pdfPath = doc.pdfPath;
+          } else if (doc.pdfUrl != null && doc.pdfUrl!.isNotEmpty) {
+            pdfPath = await FileService.downloadEncryptAndSaveFile(
+              doc.pdfUrl!,
+              "livre_${doc.id}.enc",
+            );
+          }
 
-          doc = doc.copyWith(
-            pdfPath: assets["pdfPath"],
-            image: assets["imagePath"],
-          );
+          // 🔹 Vérifier image
+          String? imagePath;
+          if (doc.image != null && File(doc.image!).existsSync()) {
+            imagePath = doc.image;
+          } else if (doc.imageUrl != null && doc.imageUrl!.isNotEmpty) {
+            imagePath = await FileService.downloadEncryptAndSaveFile(
+              doc.imageUrl!,
+              "image_${doc.id}.enc",
+            );
+          }
+
+          // 🔹 Mettre à jour le document avec les chemins valides
+          doc = doc.copyWith(pdfPath: pdfPath, image: imagePath);
 
           bibliotheque.insert(0, doc);
 
-          // ✅ Sauvegarde dans SQLite
+          // 🔹 Sauvegarde dans SQLite
           await repository.saveDocument(doc);
         }
 
-        // ✅ Sauvegarde dans Hive
+        // 🔹 Sauvegarde dans Hive
         final box = await Hive.openBox('bibliotheque_$userId');
         await box.put('livres', bibliotheque.map((d) => d.toJson()).toList());
 
         return bibliotheque;
       }
-    } catch (_) {
+    } catch (e) {
+      print("Erreur fetchBibliotheque: $e");
       // 🔹 Pas de connexion → lecture locale
     }
 
@@ -140,6 +155,7 @@ class LivreManager {
 
     return [];
   }
+
 
   // ============================================================
 // 🔹 Récupérer tous les documents (API uniquement, Admin)
@@ -502,7 +518,7 @@ class LivreManager {
   // Desativation
   static Future<bool> desactiverDocumentAPI(int id) async {
     final response = await http.put(
-      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/$id/disable"),
+      Uri.parse("https://daaga-production.up.railway.app/$id/disable"),
     );
     return response.statusCode == 200;
   }
@@ -553,7 +569,7 @@ class LivreManager {
   // 📌 Récupérer le solde d’un utilisateur via son user_id
   static Future<Map<String, dynamic>> getSolde(int userId) async {
     final response = await http.get(
-      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/wallets/$userId/solde"),
+      Uri.parse("https://daaga-production.up.railway.app/wallets/$userId/solde"),
     );
 
     if (response.statusCode == 200) {
@@ -566,7 +582,7 @@ class LivreManager {
 // 📌 Récupérer le nombre de ventes d’un utilisateur (vendeur) via son user_id
   static Future<Map<String, dynamic>> getNombreVentesParUser(int userId) async {
     final response = await http.get(
-      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/wallets/$userId/ventes"),
+      Uri.parse("https://daaga-production.up.railway.app/wallets/$userId/ventes"),
     );
 
     if (response.statusCode == 200) {

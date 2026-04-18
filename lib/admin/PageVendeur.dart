@@ -37,7 +37,7 @@ class _PageVendeurState extends State<PageVendeur> {
   Future<void> _chargerVendeurs() async {
     setState(() => isLoading = true);
 
-    final uri = Uri.parse("https://calm-imagination-production-5d97.up.railway.app/users/").replace(
+    final uri = Uri.parse("https://daaga-production.up.railway.app/users/").replace(
       queryParameters: {
         'skip': '$skip',
         'limit': '$limit',
@@ -71,7 +71,7 @@ class _PageVendeurState extends State<PageVendeur> {
   }
 
   Future<void> supprimerVendeur(int id) async {
-    final response = await http.delete(Uri.parse("http://10.17.104.142:8000/users/$id"));
+    final response = await http.delete(Uri.parse("http://daaga-production.up.railway.app/users/$id"));
 
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(

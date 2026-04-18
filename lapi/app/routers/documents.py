@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession # type: ignore
 from sqlalchemy.future import select # type: ignore
 from app.database import get_db # type: ignore
 from app.models import User, Document, Bibliotheque # type: ignore
-from app.schemas import DocumentResponse # type: ignore
+from app.schemas import DocumentResponse , Documentbiblio # type: ignore
 from typing import List, Optional
 from pydantic import BaseModel
 from pathlib import Path
@@ -54,9 +54,9 @@ async def publier_document_upload(
     pdf_name = f"{uuid.uuid4()}_{clean_filename(pdf.filename)}"
     cover_name = f"{uuid.uuid4()}_{clean_filename(couverture.filename)}"
 
-    # 🔹 Upload vers Supabase
+    #  Upload vers Supabase
     pdf_bytes = await pdf.read()
-    cover_bytes = await couverture.read()
+    cover_bytes = await couverture.read()   
 
     supabase.storage.from_("uploads").upload(pdf_name, pdf_bytes)
     supabase.storage.from_("uploads").upload(cover_name, cover_bytes)
@@ -199,21 +199,20 @@ async def supprimer_document(doc_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Document introuvable")
 
     try:
-        upload_dir = Path(__file__).parent.parent / "uploads"
+        # Supprimer dans Supabase Storage
         if doc.pdf_path:
-            pdf_file = upload_dir / Path(doc.pdf_path).name
-            if pdf_file.exists():
-                pdf_file.unlink()
+            pdf_name = Path(doc.pdf_path).name  # extrait le nom du fichier
+            supabase.storage.from_("uploads").remove([pdf_name])
         if doc.couverture_path:
-            cover_file = upload_dir / Path(doc.couverture_path).name
-            if cover_file.exists():
-                cover_file.unlink()
+            cover_name = Path(doc.couverture_path).name
+            supabase.storage.from_("uploads").remove([cover_name])
     except Exception as e:
-        print(f"Erreur suppression fichier: {e}")
+        print(f"Erreur suppression fichier Supabase: {e}")
 
     await db.delete(doc)
     await db.commit()
     return {"status": "success", "message": "Document et fichiers supprimés"}
+
 
 # 🔹 Désactiver un document
 @router.put("/{doc_id}/disable")
@@ -286,10 +285,9 @@ async def get_documents_vendus(vendeur_id: int, db: AsyncSession = Depends(get_d
     return result.scalars().all()
 
 # 🔹 Récupérer tous les livres de la bibliothèque d’un utilisateur
-@router.get("/users/{user_id}/bibliotheque", response_model=list[DocumentResponse])
+@router.get("/users/{user_id}/bibliotheque", response_model=list[Documentbiblio])
 async def get_bibliotheque(user_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
+    user = await db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
@@ -299,7 +297,12 @@ async def get_bibliotheque(user_id: int, db: AsyncSession = Depends(get_db)):
         .where(Bibliotheque.user_id == user_id)
     )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    docs = result.scalars().all()
+
+    # 🔹 Transformer en réponses avec URLs Supabase
+    return [Documentbiblio.from_orm_with_urls(doc) for doc in docs]
+
+
 
 # Recuperer les document desactivé
 @router.get("/desactives", response_model=list[DocumentResponse])

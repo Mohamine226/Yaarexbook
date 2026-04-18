@@ -7,7 +7,7 @@ import '../client/PdfData.dart';
 import 'package:uuid/uuid.dart';
 
 class ApiService {
-  static const String baseUrl = "https://calm-imagination-production-5d97.up.railway.app"; // ton backend FastAPI
+  static const String baseUrl = "https://daaga-production.up.railway.app"; // ton backend FastAPI
 
 
   // -----------------------------

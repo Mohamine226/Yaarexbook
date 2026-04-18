@@ -47,7 +47,7 @@ class _PageConnexionState extends State<PageConnexion> {
 
     // 🔹 Vérifie auprès du backend FastAPI
     final response = await http.post(
-      Uri.parse("https://calm-imagination-production-5d97.up.railway.app/auth/login"),
+      Uri.parse("https://daaga-production.up.railway.app/auth/login"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "identifier": mailController.text.trim(),
@@ -139,7 +139,7 @@ class _PageConnexionState extends State<PageConnexion> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const Text("Bienvenue sur Daaga"),
+                const Text("Bienvenue sur MyEbook"),
                 const SizedBox(height: 25),
                 Form(
                   key: _formKey,
@@ -207,26 +207,26 @@ class _PageConnexionState extends State<PageConnexion> {
                           ),
                         ],
                       ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const OublierPage()),
-                              );
-                            },
-                            child: const Text(
-                              "Mot de passe oublié",
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
+                      //Row(
+                        //mainAxisAlignment: MainAxisAlignment.center,
+                        //children: [
+                          //GestureDetector(
+                            //onTap: () {
+                            //  Navigator.push(
+                            //    context,
+                            //    MaterialPageRoute(builder: (context) => const OublierPage()),
+                            //  );
+                            //},
+                            //child: const Text(
+                            //  "Mot de passe oublié",
+                            //  style: TextStyle(
+                            //    color: Colors.green,
+                            //    fontWeight: FontWeight.bold,
+                            //  ),
+                            //),
+                         // ),
+                        //],
+                      //)
                     ],
                   ),
                 ),

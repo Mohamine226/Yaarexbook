@@ -9,7 +9,7 @@ import '../utils/format.dart';
 import 'common.dart';
 import 'cover_image.dart';
 
-/// Carte d'un document dans un fil ou une liste : couverture, auteur, like,
+/// Document dans un fil ou une liste : couverture, auteur, like,
 /// nombre de commentaires. Un appui ouvre la fiche du document.
 class DocumentCard extends StatefulWidget {
   final Doc doc;
@@ -34,6 +34,7 @@ class DocumentCard extends StatefulWidget {
 class _DocumentCardState extends State<DocumentCard> {
   late Doc doc = widget.doc;
   bool _busy = false;
+  bool _expanded = false;
 
   @override
   void didUpdateWidget(covariant DocumentCard old) {
@@ -89,89 +90,146 @@ class _DocumentCardState extends State<DocumentCard> {
     MaterialPageRoute(builder: (_) => UserProfilePage(userId: doc.auteurId, name: doc.auteurNom)),
   );
 
+  /// Description repliée sur 2 lignes, « Voir plus » à droite de la 2ème ligne.
+  /// Dépliée : « Voir moins » aligné à droite sous le texte.
+  Widget _buildDescription(ColorScheme scheme) {
+    const style = TextStyle(fontSize: 14, height: 1.35);
+    const maxLines = 2;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    final linkStyle = style.copyWith(color: scheme.primary, fontWeight: FontWeight.w600);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final tp = TextPainter(
+        text: TextSpan(text: doc.description, style: style),
+        maxLines: maxLines,
+        textDirection: Directionality.of(context),
+      )..layout(maxWidth: constraints.maxWidth);
+      final overflows = tp.didExceedMaxLines;
+
+      if (_expanded) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(doc.description, style: style),
+            if (overflows)
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _expanded = false),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text('Voir moins', style: linkStyle),
+                  ),
+                ),
+              ),
+          ],
+        );
+      }
+
+      return Stack(
+        children: [
+          Text(doc.description, maxLines: maxLines, overflow: TextOverflow.ellipsis, style: style),
+          if (overflows)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _expanded = true),
+                child: Container(
+                  color: bg,
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Text('… Voir plus', style: linkStyle),
+                ),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Qui a publié
-          if (widget.showAuthor)
-            InkWell(
-              onTap: _openAuthor,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                child: Row(children: [
-                  Avatar(doc.auteurNom, radius: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(doc.auteurNom, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text(
-                          [timeAgo(doc.createdAt), doc.categorie].where((s) => s.isNotEmpty).join(' · '),
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (doc.isDisabled) const Chip(label: Text('Désactivé'), visualDensity: VisualDensity.compact),
-                ]),
-              ),
-            )
-          else
-            const SizedBox(height: 8),
-
-          // 2. Titre et description, au-dessus de l'image
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Qui a publié
+        if (widget.showAuthor)
           InkWell(
-            onTap: _open,
+            onTap: _openAuthor,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(doc.titre, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  if (doc.description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(doc.description, maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, height: 1.35)),
-                  ],
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: Row(children: [
+                Avatar(doc.auteurNom, radius: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(doc.auteurNom, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text(
+                        [timeAgo(doc.createdAt), doc.categorie].where((s) => s.isNotEmpty).join(' · '),
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                if (doc.isDisabled) const Chip(label: Text('Désactivé'), visualDensity: VisualDensity.compact),
+              ]),
+            ),
+          )
+        else
+          const SizedBox(height: 8),
+
+        // 2. Titre et description, au-dessus de l'image
+        InkWell(
+          onTap: _open,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(doc.titre, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                if (doc.description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  _buildDescription(scheme),
                 ],
-              ),
+              ],
             ),
           ),
+        ),
 
-          // 3. L'image
-          InkWell(
-            onTap: _open,
-            child: CoverImage(url: doc.couvertureUrl, localPath: widget.localCover, width: double.infinity, height: 320),
-          ),
+        // 3. L'image
+        InkWell(
+          onTap: _open,
+          child: CoverImage(url: doc.couvertureUrl, localPath: widget.localCover, width: double.infinity, height: 320),
+        ),
 
-          // 4. Sous l'image : J'aime et Commentaires
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: Row(children: [
-              TextButton.icon(
-                onPressed: _toggleLike,
-                icon: Icon(doc.liked ? Icons.favorite : Icons.favorite_border, color: doc.liked ? Colors.red : Colors.grey.shade700),
-                label: Text('${doc.nbLikes}', style: TextStyle(color: Colors.grey.shade800)),
-              ),
-              TextButton.icon(
-                onPressed: _comments,
-                icon: Icon(Icons.mode_comment_outlined, color: Colors.grey.shade700),
-                label: Text('${doc.nbCommentaires}', style: TextStyle(color: Colors.grey.shade800)),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: _open,
-                child: Text('Voir le document', style: TextStyle(color: scheme.primary)),
-              ),
-            ]),
-          ),
-        ],
-      ),
+        // 4. Sous l'image : J'aime et Commentaires
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(children: [
+            TextButton.icon(
+              onPressed: _toggleLike,
+              icon: Icon(doc.liked ? Icons.favorite : Icons.favorite_border, color: doc.liked ? Colors.red : Colors.grey.shade700),
+              label: Text('${doc.nbLikes}', style: TextStyle(color: Colors.grey.shade800)),
+            ),
+            TextButton.icon(
+              onPressed: _comments,
+              icon: Icon(Icons.mode_comment_outlined, color: Colors.grey.shade700),
+              label: Text('${doc.nbCommentaires}', style: TextStyle(color: Colors.grey.shade800)),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: _open,
+              child: Text('Voir le document', style: TextStyle(color: scheme.primary)),
+            ),
+          ]),
+        ),
+        const Divider(height: 12),
+      ],
     );
   }
 }

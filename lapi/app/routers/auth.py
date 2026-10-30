@@ -227,12 +227,11 @@ def _hash_code(user_id: int, code: str) -> str:
 
 @router.post("/forgot-password", response_model=Message)
 async def forgot_password(payload: ForgotPasswordIn, db: AsyncSession = Depends(get_db)):
-    # La réponse est toujours la même, que le compte existe ou non.
-    generic = Message(message="Si ce compte existe, un code vient d'être envoyé par email")
+    ok = Message(message="Un code de vérification vient d'être envoyé par email")
 
     user = await find_user(db, payload.identifier)
     if user is None:
-        return generic
+        raise HTTPException(status_code=404, detail="Aucun compte n'existe avec cet email")
 
     last = (
         await db.execute(
@@ -242,7 +241,7 @@ async def forgot_password(payload: ForgotPasswordIn, db: AsyncSession = Depends(
         )
     ).scalars().first()
     if last and utcnow() - last.created_at < timedelta(seconds=60):
-        return generic  # au plus un code par minute
+        return ok  # au plus un code par minute : le code déjà envoyé reste valable
 
     code = f"{secrets.randbelow(1_000_000):06d}"
     await db.execute(delete(PasswordResetCode).where(PasswordResetCode.user_id == user.id))
@@ -255,7 +254,7 @@ async def forgot_password(payload: ForgotPasswordIn, db: AsyncSession = Depends(
     )
     await db.commit()
     await send_reset_code(user.email, code, RESET_CODE_MINUTES)
-    return generic
+    return ok
 
 
 @router.post("/reset-password", response_model=Message)

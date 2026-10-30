@@ -126,20 +126,20 @@ class _LoginPageState extends State<LoginPage> {
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Text('Se connecter'),
                     ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                      onPressed: () async {
-                        final created = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
-                        if (created == true && context.mounted) showMsg(context, 'Compte créé : connectez-vous.');
-                      },
-                      child: const Text('Créer un compte'),
-                    ),
-                    const SizedBox(height: 24),
-                    TextButton.icon(
-                      onPressed: _serverDialog,
-                      icon: const Icon(Icons.dns_outlined, size: 18),
-                      label: Text('Serveur : ${AppConfig.baseUrl}', overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('Pas de compte ?', style: TextStyle(color: Colors.grey.shade700)),
+                        TextButton(
+                          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: const Size(0, 36)),
+                          onPressed: () async {
+                            final created = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
+                            if (created == true && context.mounted) showMsg(context, 'Compte créé : connectez-vous.');
+                          },
+                          child: const Text("S'inscrire", style: TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ],
                     ),
                   ],
                 ),

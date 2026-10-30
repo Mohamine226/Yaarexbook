@@ -1,504 +1,289 @@
+import hashlib
+import hmac
+import secrets
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import update
-from pydantic import BaseModel, EmailStr
-from typing import Optional
-from app.database import AsyncSessionLocal, get_db, engine
-from app.models.user import User, Base
-from jose import jwt, JWTError
-from sqlalchemy import delete
-from datetime import datetime, timedelta
-from fastapi.security import OAuth2PasswordBearer
-from app.models import UserSession, VerificationCode, PasswordResetCode
-from app.schemas import UserCreate, LoginRequest, ProfileUpdate, PasswordUpdate, VerifyResetCodeRequest, UserStatusResponse, LogoutRequest, VerifyRequest, UserCreateAdmin, ResendCodeRequest
-from passlib.context import CryptContext
-import random
 
-from app.services.messaging import send_reset_email, send_reset_sms
-
-
-#  Création des tables (à faire au démarrage, pas dans les endpoints)
-# En async, il vaut mieux utiliser alembic pour les migrations
-# Base.metadata.create_all(bind=engine)  # à éviter en async
+from app.config import RESET_CODE_MAX_ATTEMPTS, RESET_CODE_MINUTES, SECRET_KEY
+from app.database import get_db
+from app.models import DeviceSession, Document, PasswordResetCode, User, utcnow
+from app.schemas import (
+    ChangePasswordIn,
+    DeleteAccountIn,
+    DeviceOut,
+    ForgotPasswordIn,
+    LoginIn,
+    LoginOut,
+    Message,
+    ProfileUpdate,
+    RegisterIn,
+    ResetPasswordIn,
+    UserOut,
+)
+from app.security import Auth, create_token, current_auth, current_user, hash_password, verify_password
+from app.services import storage
+from app.services.mailer import send_reset_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
-
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(password: str, hashed: str) -> bool:
-    return pwd_context.verify(password, hashed)
 
 
-# -----------------------------
-# Config JWT
-# -----------------------------
-SECRET_KEY = "ton_secret_key"   #  change avec une vraie clé secrète
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+def _clean(value: str | None) -> str | None:
+    value = (value or "").strip()
+    return value or None
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
 
-def verify_token(token: str) -> str:
+async def find_user(db: AsyncSession, identifier: str) -> User | None:
+    """Retrouve un compte par email (insensible à la casse) ou par téléphone."""
+    identifier = identifier.strip()
+    return (
+        await db.execute(
+            select(User).where((User.email == identifier.lower()) | (User.telephone == identifier))
+        )
+    ).scalars().first()
+
+
+# ------------------------------------------------------------------ inscription / connexion
+@router.post("/register", response_model=UserOut, status_code=201)
+async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)):
+    email = payload.email.lower()
+    telephone = _clean(payload.telephone)
+
+    if (await db.execute(select(User).where(User.email == email))).scalars().first():
+        raise HTTPException(status_code=409, detail="Cet email est déjà utilisé")
+    if telephone and (await db.execute(select(User).where(User.telephone == telephone))).scalars().first():
+        raise HTTPException(status_code=409, detail="Ce numéro de téléphone est déjà utilisé")
+
+    user = User(
+        nom=payload.nom.strip(),
+        prenom=payload.prenom.strip(),
+        email=email,
+        telephone=telephone,
+        pays=_clean(payload.pays),
+        profession=_clean(payload.profession),
+        password_hash=await hash_password(payload.password),
+        role="membre",  # un rôle n'est jamais choisi par l'utilisateur
+    )
+    db.add(user)
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Token invalide")
-        return email
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token invalide ou expiré")
-    
-async def authenticate_user(db, email: str, password: str):
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user or not verify_password(password, user.password):
-        raise HTTPException(status_code=401, detail="Identifiants invalides")
+        await db.commit()
+    except IntegrityError:  # deux inscriptions simultanées
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Email ou téléphone déjà utilisé")
+    await db.refresh(user)
     return user
 
 
-# -----------------------------
-# Endpoints
-# -----------------------------
-@router.post("/creer/unadmin")
-async def register(user: UserCreateAdmin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == user.email))
-    exists = result.scalars().first()
-    if exists:
-        return {"status": "error", "message": "Email déjà utilisé"}
+@router.post("/login", response_model=LoginOut)
+async def login(payload: LoginIn, db: AsyncSession = Depends(get_db)):
+    user = await find_user(db, payload.identifier)
+    if not await verify_password(payload.password, user.password_hash if user else None) or user is None:
+        raise HTTPException(status_code=401, detail="Identifiant ou mot de passe incorrect")
 
-    db_user = User(
-        nom=user.nom,
-        prenom=user.prenom,
-        email=user.email,
-        telephone=user.telephone,
-        pays=user.pays,
-        profession=user.profession,
-        password=hash_password(user.password),
-        role= user.role,
-    )
-    db.add(db_user)
+    # Chaque appareil a sa propre session ; reconnecter le même appareil réutilise la sienne.
+    session = None
+    if payload.device_id:
+        session = (
+            await db.execute(
+                select(DeviceSession).where(
+                    DeviceSession.user_id == user.id, DeviceSession.device_id == payload.device_id
+                )
+            )
+        ).scalars().first()
+    if session is None:
+        session = DeviceSession(user_id=user.id, device_id=payload.device_id or secrets.token_hex(8))
+        db.add(session)
+    session.device_name = payload.device_name.strip() or session.device_name or "Appareil inconnu"
+    session.last_seen = utcnow()
     await db.commit()
-    await db.refresh(db_user)
+    await db.refresh(session)
 
-    return {
-        "status": "success",
-        "message": "Inscription réussie",
-        "user": {
-            "id": db_user.id,
-            "nom": db_user.nom,
-            "prenom": db_user.prenom,
-            "email": db_user.email,
-            "telephone": db_user.telephone,
-            "pays": db_user.pays,
-            "profession": db_user.profession,
-            "role": db_user.role,
-        }
-    }
+    return LoginOut(access_token=create_token(user.id, session.id), user=user)
 
-@router.post("/admin")
-async def register(user: UserCreateAdmin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == user.email))
-    exists = result.scalars().first()
-    if exists:
-        return {"status": "error", "message": "Email déjà utilisé"}
 
-    db_user = User(
-        nom=user.nom,
-        prenom=user.prenom,
-        email=user.email,
-        telephone=user.telephone,
-        pays=user.pays,
-        profession=user.profession,
-        password=hash_password(user.password),
-        #role= user.role,
-    )
-    db.add(db_user)
+@router.post("/logout", response_model=Message)
+async def logout(auth: Auth = Depends(current_auth), db: AsyncSession = Depends(get_db)):
+    """Déconnecte uniquement l'appareil qui fait la demande."""
+    await db.execute(delete(DeviceSession).where(DeviceSession.id == auth.session.id))
     await db.commit()
-    await db.refresh(db_user)
-
-    return {
-        "status": "success",
-        "message": "Inscription réussie",
-        "user": {
-            "id": db_user.id,
-            "nom": db_user.nom,
-            "prenom": db_user.prenom,
-            "email": db_user.email,
-            "telephone": db_user.telephone,
-            "pays": db_user.pays,
-            "profession": db_user.profession,
-            #"role": db_user.role,
-        }
-    }
-
-# Endpoints du code verifiaction
-@router.post("/pre_register")
-async def pre_register(user: UserCreate, db: AsyncSession = Depends(get_db)):
-    # Vérifier si l'email existe déjà
-    result = await db.execute(select(User).where(User.email == user.email))
-    exists = result.scalars().first()
-    if exists:
-        return {"status": "error", "message": "Email déjà utilisé"}
-
-    # Créer l'utilisateur en attente de vérification
-    db_user = User(
-        nom=user.nom,
-        prenom=user.prenom,
-        email=user.email,
-        telephone=user.telephone,
-        pays=user.pays,
-        profession=user.profession,
-        password=hash_password(user.password),
-        is_verified=False
-    )
-    db.add(db_user)
-    await db.commit()
-    await db.refresh(db_user)
-
-    # Générer un code à 6 chiffres
-    import random
-    from datetime import datetime, timedelta
-    code = str(random.randint(100000, 999999))
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
-
-    verification = VerificationCode(user_id=db_user.id, code=code, expires_at=expires_at)
-    db.add(verification)
-    await db.commit()
-
-    # 🔹 Afficher le code dans la console
-    print(f" Code de vérification pour {db_user.email} : {code}")
-
-    # En local : tu peux aussi le retourner dans la réponse pour tester
-    return {"status": "success", "message": "Code généré", "code": code}
-
-# Verification du code
-
-@router.post("/verify")
-async def verify(payload: VerifyRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == payload.email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
-    result = await db.execute(
-        select(VerificationCode).where(
-            (VerificationCode.user_id == user.id) & (VerificationCode.code == payload.code)
-        )
-    )
-    verification = result.scalars().first()
-    if not verification:
-        return {"status": "error", "message": "Code invalide"}
-
-    from datetime import datetime
-    if verification.expires_at < datetime.utcnow():
-        return {"status": "error", "message": "Code expiré"}
-
-    #  Valider l'inscription
-    user.is_verified = True
-    await db.commit()
-
-    return {"status": "success", "message": "Inscription validée"}
+    return Message(message="Déconnecté")
 
 
-# Renvoyer le code 
-@router.post("/resend_code")
-async def resend_code(payload: ResendCodeRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == payload.email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+# ------------------------------------------------------------------ mon compte
+@router.get("/me", response_model=UserOut)
+async def me(user: User = Depends(current_user)):
+    return user
 
-    import random
-    from datetime import datetime, timedelta
-    new_code = str(random.randint(100000, 999999))
-    expires_at = datetime.utcnow() + timedelta(minutes=3)
 
-    result = await db.execute(select(VerificationCode).where(VerificationCode.user_id == user.id))
-    verification = result.scalars().first()
+@router.put("/me", response_model=UserOut)
+async def update_me(payload: ProfileUpdate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    data = payload.model_dump(exclude_unset=True)
 
-    if verification:
-        verification.code = new_code
-        verification.expires_at = expires_at
-    else:
-        verification = VerificationCode(user_id=user.id, code=new_code, expires_at=expires_at)
-        db.add(verification)
+    if "telephone" in data:
+        telephone = _clean(data["telephone"])
+        if telephone and telephone != user.telephone:
+            taken = (
+                await db.execute(select(User).where(User.telephone == telephone, User.id != user.id))
+            ).scalars().first()
+            if taken:
+                raise HTTPException(status_code=409, detail="Ce numéro de téléphone est déjà utilisé")
+        user.telephone = telephone
+    for field in ("nom", "prenom"):
+        if data.get(field):
+            setattr(user, field, data[field].strip())
+    for field in ("pays", "profession"):
+        if field in data:
+            setattr(user, field, _clean(data[field]))
 
-    await db.commit()
-
-    print(f"🔄 Nouveau code pour {user.email} : {new_code}")
-
-    return {"status": "success", "message": "Nouveau code envoyé", "code": new_code}
-
-@router.put("/update-profile")
-async def update_profile(payload: ProfileUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == payload.email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-
-    user.pays = payload.pays
-    user.profession = payload.profession
     await db.commit()
     await db.refresh(user)
-
-    return {
-        "status": "success",
-        "message": "Profil mis à jour",
-        "user": {
-            "id": user.id,
-            "nom": user.nom,
-            "prenom": user.prenom,
-            "email": user.email,
-            "telephone": user.telephone,
-            "pays": user.pays,
-            "profession": user.profession,
-        }
-    }
-
-# 2. Vérification du code
-@router.post("/verify-reset-code")
-async def verify_reset_code(payload: VerifyResetCodeRequest, db: AsyncSession = Depends(get_db)):
-    identifier = payload.identifier
-    code = payload.code
-
-    print(f" Vérification du code pour identifiant: {identifier}, code reçu: {code}")
-
-    #  Envoi par email si identifiant = email
-    if identifier == user.email:
-        await send_reset_email(user.email, code)
-
-    #  Envoi par SMS si identifiant = téléphone
-    else:
-        send_reset_sms(user.telephone, code)
-
-    result = await db.execute(
-        select(User).where((User.email == identifier) | (User.telephone == identifier))
-    )
-    user = result.scalars().first()
-    print(f" Utilisateur trouvé: {user.email if user else 'aucun'}")
-
-    if not user:
-        print(" Aucun utilisateur trouvé")
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
-    reset_code = await db.execute(
-        select(PasswordResetCode).where(
-            PasswordResetCode.user_id == user.id,
-            PasswordResetCode.code == code,
-            PasswordResetCode.expires_at > datetime.utcnow()
-        )
-    )
-    reset_code = reset_code.scalars().first()
-    print(f" Code trouvé en base: {reset_code.code if reset_code else 'aucun'}")
-
-    if not reset_code:
-        print("❌ Code invalide ou expiré")
-        raise HTTPException(status_code=400, detail="Code invalide ou expiré")
-
-    print(" Code validé avec succès")
-    return {"status": "success", "message": "Code validé"}
-
-# 3. Mise à jour du mot de passe
-@router.put("/set-password")
-async def set_password(payload: PasswordUpdate, db: AsyncSession = Depends(get_db)):
-    identifier = payload.identifier
-    code = payload.code
-    new_password = payload.new_password
-
-    print(f" Requête reçue pour set-password avec identifiant: {identifier}, code: {code}")
-
-    result = await db.execute(
-        select(User).where((User.email == identifier) | (User.telephone == identifier))
-    )
-    user = result.scalars().first()
-    print(f" Utilisateur trouvé: {user.email if user else 'aucun'}")
-
-    if not user:
-        print(" Aucun utilisateur trouvé")
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
-    reset_code = await db.execute(
-        select(PasswordResetCode).where(
-            PasswordResetCode.user_id == user.id,
-            PasswordResetCode.code == code,
-            PasswordResetCode.expires_at > datetime.utcnow()
-        )
-    )
-    reset_code = reset_code.scalars().first()
-    print(f" Code trouvé en base: {reset_code.code if reset_code else 'aucun'}")
-
-    if not reset_code:
-        print(" Code invalide ou expiré")
-        raise HTTPException(status_code=400, detail="Code invalide ou expiré")
-
-    print(f"🛠 Mise à jour du mot de passe pour {user.email}")
-    user.password = hash_password(new_password)  
-    await db.commit()
-    await db.refresh(user)
-
-     #  Envoi par email si identifiant = email
-    if identifier == user.email:
-        await send_reset_email(user.email, code)
-
-    # 📱 Envoi par SMS si identifiant = téléphone
-    else:
-        send_reset_sms(user.telephone, code)
+    return user
 
 
-    print(f" Mot de passe mis à jour pour {user.email}")
-    return {"status": "success", "message": "Mot de passe mis à jour avec succès"}
-
-
-@router.post("/login")
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(User).where((User.email == payload.identifier) | (User.telephone == payload.identifier))
-    )
-    user = result.scalars().first()
-
-    if not user or not verify_password(payload.password, user.password):
-        return {"status": "error", "message": "Email ou mot de passe incorrect"}
-
-    access_token = create_access_token(data={"sub": user.email})
-
-    result = await db.execute(
-        select(UserSession).where(
-            (UserSession.user_id == user.id) &
-            (UserSession.device_type == payload.device_type)
-        )
-    )
-    existing_device = result.scalars().first()
-
-    if existing_device:
-        if payload.device_type == "mobile":
-            return {
-                "status": "error",
-                "message": "Ce compte est déjà connecté sur un téléphone"
-            }
-
-        elif payload.device_type == "pc":
-            return {
-                "status": "error",
-                "message": "Ce compte est déjà connecté sur un ordinateur"
-            }
-        else:
-            existing_device.token = access_token
-            existing_device.is_active = True
-            await db.commit()
-    else:
-        new_session = UserSession(
-            user_id=user.id,
-            token=access_token,
-            device_id=payload.device_id,
-            device_type=payload.device_type,
-            is_active=True
-        )
-        db.add(new_session)
-        await db.commit()
-        await db.refresh(new_session)
-
-    return {
-        "status": "success",
-        "message": "Connexion réussie",
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "nom": user.nom,
-            "prenom": user.prenom,
-            "email": user.email,
-            "telephone": user.telephone,
-            "pays": user.pays,
-            "profession": user.profession,
-            "role": user.role,
-        },
-    }
-
-@router.post("/logout")
-async def logout(
-    payload: LogoutRequest | None = None,
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
+@router.post("/change-password", response_model=Message)
+async def change_password(
+    payload: ChangePasswordIn,
+    auth: Auth = Depends(current_auth),
+    db: AsyncSession = Depends(get_db),
 ):
-    # 🔹 Identifier l'utilisateur via le token
-    result = await db.execute(select(UserSession).where(UserSession.token == token))
-    session = result.scalars().first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session introuvable")
+    if not await verify_password(payload.old_password, auth.user.password_hash):
+        raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
 
-    user_id = session.user_id
-
-    
-
-    if payload and payload.device_type:
-        print("Device type reçu:", payload.device_type)
-        # 🔹 Déconnexion ciblée (supprimer la session pour un device précis)
-        result = await db.execute(
-            select(UserSession).where(
-                (UserSession.user_id == user_id) &
-                (UserSession.device_type == payload.device_type)
-            )
-        )
-        target_session = result.scalars().first()
-        if not target_session:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Aucune session {payload.device_type} trouvée pour l'utilisateur {user_id}"
-            )
-        await db.delete(target_session)
-        await db.commit()
-        return {"status": "success", "message": f"Déconnecté sur {payload.device_type}"}
-    else:
-        # 🔹 Déconnexion globale (supprimer toutes les sessions de l'utilisateur)
-        await db.execute(
-            delete(UserSession).where(UserSession.user_id == user_id)
-        )
-        await db.commit()
-        return {"status": "success", "message": "Déconnecté partout"}
-
-
-@router.get("/me")
-async def me(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
-    email = verify_token(token)
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
-    return {
-        "id": user.id,
-        "nom": user.nom,
-        "prenom": user.prenom,
-        "email": user.email,
-        "telephone": user.telephone,
-        "pays": user.pays,
-        "profession": user.profession,
-    }
-
-@router.get("/admin/users", response_model=list[UserStatusResponse])
-async def get_users_status(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(User, UserSession).join(UserSession, User.id == UserSession.user_id, isouter=True)
+    auth.user.password_hash = await hash_password(payload.new_password)
+    # Par sécurité, les autres appareils doivent se reconnecter avec le nouveau mot de passe.
+    await db.execute(
+        delete(DeviceSession).where(DeviceSession.user_id == auth.user.id, DeviceSession.id != auth.session.id)
     )
-    rows = result.all()
+    await db.commit()
+    return Message(message="Mot de passe changé")
 
-    users_status = []
-    for user, session in rows:
-        users_status.append(UserStatusResponse(
-            id=user.id,
-            username=user.email,   # 🔹 remplacer par le champ réel
-            connected=session.is_active if session else False,
-            device_type=session.device_type if session else None
-        ))
 
-    return users_status
+@router.post("/delete-account", response_model=Message)
+async def delete_account(
+    payload: DeleteAccountIn, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
+):
+    if not await verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Mot de passe incorrect")
+
+    docs = (await db.execute(select(Document).where(Document.auteur_id == user.id))).scalars().all()
+    pdfs, covers = [d.pdf_file for d in docs], [d.cover_file for d in docs]
+
+    await db.delete(user)  # les tables liées sont nettoyées par ON DELETE CASCADE
+    await db.commit()
+    storage.delete_files(pdfs, covers)
+    return Message(message="Compte supprimé")
+
+
+# ------------------------------------------------------------------ appareils connectés
+@router.get("/sessions", response_model=list[DeviceOut])
+async def list_sessions(auth: Auth = Depends(current_auth), db: AsyncSession = Depends(get_db)):
+    rows = (
+        await db.execute(
+            select(DeviceSession)
+            .where(DeviceSession.user_id == auth.user.id)
+            .order_by(DeviceSession.last_seen.desc())
+        )
+    ).scalars().all()
+    return [
+        DeviceOut(
+            id=s.id,
+            device_name=s.device_name,
+            created_at=s.created_at,
+            last_seen=s.last_seen,
+            current=s.id == auth.session.id,
+        )
+        for s in rows
+    ]
+
+
+@router.delete("/sessions/{session_id}", response_model=Message)
+async def revoke_session(session_id: int, auth: Auth = Depends(current_auth), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        delete(DeviceSession).where(DeviceSession.id == session_id, DeviceSession.user_id == auth.user.id)
+    )
+    await db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Appareil introuvable")
+    return Message(message="Appareil déconnecté")
+
+
+@router.delete("/sessions", response_model=Message)
+async def revoke_other_sessions(auth: Auth = Depends(current_auth), db: AsyncSession = Depends(get_db)):
+    """Déconnecte tous les autres appareils (celui-ci reste connecté)."""
+    await db.execute(
+        delete(DeviceSession).where(DeviceSession.user_id == auth.user.id, DeviceSession.id != auth.session.id)
+    )
+    await db.commit()
+    return Message(message="Les autres appareils ont été déconnectés")
+
+
+# ------------------------------------------------------------------ mot de passe oublié
+def _hash_code(user_id: int, code: str) -> str:
+    return hashlib.sha256(f"{SECRET_KEY}:{user_id}:{code}".encode()).hexdigest()
+
+
+@router.post("/forgot-password", response_model=Message)
+async def forgot_password(payload: ForgotPasswordIn, db: AsyncSession = Depends(get_db)):
+    # La réponse est toujours la même, que le compte existe ou non.
+    generic = Message(message="Si ce compte existe, un code vient d'être envoyé par email")
+
+    user = await find_user(db, payload.identifier)
+    if user is None:
+        return generic
+
+    last = (
+        await db.execute(
+            select(PasswordResetCode)
+            .where(PasswordResetCode.user_id == user.id)
+            .order_by(PasswordResetCode.id.desc())
+        )
+    ).scalars().first()
+    if last and utcnow() - last.created_at < timedelta(seconds=60):
+        return generic  # au plus un code par minute
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    await db.execute(delete(PasswordResetCode).where(PasswordResetCode.user_id == user.id))
+    db.add(
+        PasswordResetCode(
+            user_id=user.id,
+            code_hash=_hash_code(user.id, code),
+            expires_at=utcnow() + timedelta(minutes=RESET_CODE_MINUTES),
+        )
+    )
+    await db.commit()
+    await send_reset_code(user.email, code, RESET_CODE_MINUTES)
+    return generic
+
+
+@router.post("/reset-password", response_model=Message)
+async def reset_password(payload: ResetPasswordIn, db: AsyncSession = Depends(get_db)):
+    invalid = HTTPException(status_code=400, detail="Code invalide ou expiré")
+
+    user = await find_user(db, payload.identifier)
+    if user is None:
+        raise invalid
+    entry = (
+        await db.execute(
+            select(PasswordResetCode)
+            .where(PasswordResetCode.user_id == user.id)
+            .order_by(PasswordResetCode.id.desc())
+        )
+    ).scalars().first()
+    if entry is None or entry.expires_at < utcnow():
+        raise invalid
+
+    if not hmac.compare_digest(entry.code_hash, _hash_code(user.id, payload.code.strip())):
+        entry.attempts += 1
+        if entry.attempts >= RESET_CODE_MAX_ATTEMPTS:
+            await db.delete(entry)  # trop d'essais : il faut redemander un code
+        await db.commit()
+        raise invalid
+
+    user.password_hash = await hash_password(payload.new_password)
+    await db.execute(delete(PasswordResetCode).where(PasswordResetCode.user_id == user.id))
+    await db.execute(delete(DeviceSession).where(DeviceSession.user_id == user.id))  # reconnexion partout
+    await db.commit()
+    return Message(message="Mot de passe réinitialisé, vous pouvez vous connecter")

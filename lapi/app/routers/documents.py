@@ -1,322 +1,315 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form # type: ignore
-from sqlalchemy.ext.asyncio import AsyncSession # type: ignore
-from sqlalchemy.future import select # type: ignore
-from app.database import get_db # type: ignore
-from app.models import User, Document, Bibliotheque # type: ignore
-from app.schemas import DocumentResponse , Documentbiblio # type: ignore
-from typing import List, Optional
-from pydantic import BaseModel
-from pathlib import Path
-import uuid
-import unicodedata, re
-import os
-from fastapi import UploadFile, File, Form, Depends
+import re
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from supabase import create_client, Client # type: ignore
+
+from app.config import MAX_COVER_BYTES, MAX_PDF_BYTES
+from app.database import get_db
+from app.models import Bibliotheque, Comment, Document, Follow, Like, User
+from app.schemas import CommentIn, CommentOut, DocumentOut, LikeOut, Message, Page
+from app.security import current_user
+from app.services import storage
+from app.services.serializers import build_documents, escape_like, nom_complet
+
+router = APIRouter(prefix="/documents", tags=["documents"])
+
+VISIBLE = Document.is_disabled == False  # noqa: E712
 
 
-router = APIRouter(
-    prefix="/documents",
-    tags=["documents"]
-)
-
-BASE_URL = os.getenv("BASE_URL")
-
-class PaginatedDocuments(BaseModel):
-    items: List[DocumentResponse]
-    next_cursor: Optional[int]
+async def get_visible_document(db: AsyncSession, doc_id: int, viewer: User) -> Document:
+    """Un document désactivé n'existe plus pour les membres ; les admins le voient encore."""
+    doc = (await db.execute(select(Document).where(Document.id == doc_id))).scalars().first()
+    if doc is None or (doc.is_disabled and viewer.role != "admin"):
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    return doc
 
 
-# 🔹 Publier un document avec upload de fichiers
+async def _id_page(db: AsyncSession, stmt, cursor: int, limit: int, viewer: User) -> Page[DocumentOut]:
+    """Page par curseur (du plus récent au plus ancien) : stable même si des documents
+    sont publiés pendant que l'on fait défiler la liste."""
+    if cursor:
+        stmt = stmt.where(Document.id < cursor)
+    docs = list((await db.execute(stmt.order_by(Document.id.desc()).limit(limit))).scalars().all())
+    items = await build_documents(db, docs, viewer.id)
+    return Page(items=items, next_cursor=docs[-1].id if len(docs) == limit else None)
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def clean_filename(filename: str) -> str:
-    nfkd = unicodedata.normalize("NFKD", filename)
-    no_accents = "".join([c for c in nfkd if not unicodedata.combining(c)])
-    return re.sub(r"[^a-zA-Z0-9._-]", "_", no_accents)
-
-@router.post("/users/{vendeur_id}/upload", response_model=DocumentResponse)
-async def publier_document_upload(
-    vendeur_id: int,
-    titre: str = Form(...),
-    description: str = Form(...),
-    prix: int = Form(...),
-    categorie: str = Form(...),
-    langue: str = Form(...),
-    domaine: str = Form(...),
+# ------------------------------------------------------------------ publication
+@router.post("", response_model=DocumentOut, status_code=201)
+async def publier(
+    titre: str = Form(..., min_length=1, max_length=200),
+    description: str = Form("", max_length=5000),
+    categorie: str = Form(..., min_length=1, max_length=60),
+    langue: str = Form(..., min_length=1, max_length=40),
+    domaine: str = Form("", max_length=100),
     pdf: UploadFile = File(...),
     couverture: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
 ):
-    pdf_name = f"{uuid.uuid4()}_{clean_filename(pdf.filename)}"
-    cover_name = f"{uuid.uuid4()}_{clean_filename(couverture.filename)}"
+    """Tout membre connecté peut publier."""
+    pdf_bytes = await pdf.read(MAX_PDF_BYTES + 1)
+    cover_bytes = await couverture.read(MAX_COVER_BYTES + 1)
+    if len(pdf_bytes) > MAX_PDF_BYTES:
+        raise HTTPException(status_code=413, detail="PDF trop volumineux (50 Mo maximum)")
+    if len(cover_bytes) > MAX_COVER_BYTES:
+        raise HTTPException(status_code=413, detail="Couverture trop volumineuse (5 Mo maximum)")
 
-    #  Upload vers Supabase
-    pdf_bytes = await pdf.read()
-    cover_bytes = await couverture.read()   
+    pdf_file = storage.save_pdf(pdf_bytes)
+    try:
+        cover_file = storage.save_cover(cover_bytes)
+    except HTTPException:
+        storage.delete_files(pdf_files=[pdf_file])
+        raise
 
-    supabase.storage.from_("uploads").upload(pdf_name, pdf_bytes)
-    supabase.storage.from_("uploads").upload(cover_name, cover_bytes)
-
-    pdf_url = supabase.storage.from_("uploads").get_public_url(pdf_name)
-    cover_url = supabase.storage.from_("uploads").get_public_url(cover_name)
-
-    nouveau_doc = Document(
-        titre=titre,
-        description=description,
-        prix=prix,
-        categorie=categorie,
-        langue=langue,
-        domaine=domaine,
-        pdf_path=pdf_url,
-        couverture_path=cover_url,
-        vendeur_id=vendeur_id
+    doc = Document(
+        titre=titre.strip(),
+        description=description.strip(),
+        categorie=categorie.strip(),
+        langue=langue.strip(),
+        domaine=domaine.strip(),
+        pdf_file=pdf_file,
+        cover_file=cover_file,
+        auteur_id=user.id,
     )
-    db.add(nouveau_doc)
+    db.add(doc)
     await db.commit()
-    await db.refresh(nouveau_doc)
-    return nouveau_doc
+    await db.refresh(doc)
+    return (await build_documents(db, [doc], user.id))[0]
 
-@router.get("/", response_model=PaginatedDocuments)
-async def get_documents(
+
+# ------------------------------------------------------------------ listes (routes fixes AVANT /{doc_id})
+@router.get("", response_model=Page[DocumentOut])
+async def rechercher(
     search: str | None = None,
     categorie: str | None = None,
-    domaine: str | None = None,
-    cursor: int | None = None,
-    limit: int = 20,
-    db: AsyncSession = Depends(get_db)
+    langue: str | None = None,
+    auteur_id: int | None = None,
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(current_user),
 ):
-    stmt = select(Document).where(Document.is_deleted == False)
-
-    if search:
-        search_pattern = f"%{search}%"
-        stmt = stmt.where(
-            Document.titre.ilike(search_pattern) |
-            Document.domaine.ilike(search_pattern) |
-            Document.categorie.ilike(search_pattern)
+    """Tous les documents, du plus récent au plus ancien. `search` cherche dans le titre,
+    la description, le domaine, la catégorie et le nom de l'auteur."""
+    stmt = select(Document).where(VISIBLE)
+    if search and search.strip():
+        pattern = f"%{escape_like(search.strip())}%"
+        stmt = stmt.join(User, User.id == Document.auteur_id).where(
+            or_(
+                Document.titre.ilike(pattern, escape="\\"),
+                Document.description.ilike(pattern, escape="\\"),
+                Document.domaine.ilike(pattern, escape="\\"),
+                Document.categorie.ilike(pattern, escape="\\"),
+                User.nom.ilike(pattern, escape="\\"),
+                User.prenom.ilike(pattern, escape="\\"),
+            )
         )
-
     if categorie:
         stmt = stmt.where(Document.categorie == categorie)
-
-    if domaine:
-        stmt = stmt.where(Document.domaine == domaine)
-
-    if cursor is not None:
-        stmt = stmt.where(Document.id > cursor)
-
-    stmt = stmt.order_by(Document.id).limit(limit)
-
-    result = await db.execute(stmt)
-    docs = result.scalars().all()
-
-    next_cursor = docs[-1].id if docs else None
-
-    return {"items": docs, "next_cursor": next_cursor}
+    if langue:
+        stmt = stmt.where(Document.langue == langue)
+    if auteur_id is not None:
+        stmt = stmt.where(Document.auteur_id == auteur_id)
+    return await _id_page(db, stmt, cursor, limit, viewer)
 
 
-@router.get("/admin", response_model=list[DocumentResponse])
-async def get_all_documents(
-    search: str | None = None,
-    skip: int = 0,          # combien d’éléments sauter
-    limit: int = 20,        # combien d’éléments renvoyer
+@router.get("/feed", response_model=Page[DocumentOut])
+async def fil_abonnements(
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(current_user),
 ):
-    query = select(Document).where(Document.is_deleted == False)
+    """Documents publiés par les personnes que l'on suit."""
+    followed = select(Follow.followed_id).where(Follow.follower_id == viewer.id)
+    stmt = select(Document).where(VISIBLE, Document.auteur_id.in_(followed))
+    return await _id_page(db, stmt, cursor, limit, viewer)
 
-    # 🔹 Filtre optionnel par recherche
-    if search:
-        query = query.where(Document.title.ilike(f"%{search}%"))
 
-    # 🔹 Appliquer la pagination
-    query = query.offset(skip).limit(limit)
-
-    result = await db.execute(query)
-    docs = result.scalars().all()
-
-    if not docs:
-        raise HTTPException(status_code=404, detail="Aucun document trouvé")
-
-    return docs
-
-# 🔹 Récupérer les documents par catégorie
-@router.get("/categorie/{categorie}", response_model=list[DocumentResponse])
-async def get_documents_by_categorie(categorie: str, search: str | None = None, db: AsyncSession = Depends(get_db)):
-    stmt = select(Document).where(Document.categorie == categorie, Document.is_deleted == False)
-    if search:
-        search_pattern = f"%{search}%" 
-        stmt = stmt.where(
-            Document.titre.ilike(search_pattern) |
-            Document.domaine.ilike(search_pattern) |
-            Document.langue.ilike(search_pattern)
-        )
-    result = await db.execute(stmt)
-    return result.scalars().all()
-
-# 🔹 Récupérer les documents d’un vendeur avec pagination
-@router.get("/users/{vendeur_id}", response_model=list[DocumentResponse])
-async def get_documents_by_vendeur(
-    vendeur_id: int,
-    skip: int = 0,          # combien d’éléments sauter
-    limit: int = 20,        # combien d’éléments renvoyer
+@router.get("/populaires", response_model=Page[DocumentOut])
+async def populaires(
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(current_user),
 ):
-    result = await db.execute(
-        select(Document)
-        .where(Document.vendeur_id == vendeur_id, Document.is_deleted == False)
-        .offset(skip)   # ✅ pagination offset
-        .limit(limit)   # ✅ pagination limit
-    )
-    return result.scalars().all()
-
-# 🔹 Récupère uniquement les livres publiés par ce vendeur avec pagination
-@router.get("/vendeur", response_model=list[DocumentResponse])
-async def get_documents_par_vendeur(
-    vendeur_id: int,
-    skip: int = 0,
-    limit: int = 20,
-    db: AsyncSession = Depends(get_db),
-):
-    query = (
-        select(Document)
-        .where(Document.vendeur_id == vendeur_id, Document.is_deleted == False)
-        .offset(skip)
-        .limit(limit)
-    )
-    result = await db.execute(query)
-    docs = result.scalars().all()
-    return docs
-
-# 🔹 Supprimer un document
-@router.delete("/{doc_id}")
-async def supprimer_document(doc_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Document).where(Document.id == doc_id))
-    doc = result.scalars().first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document introuvable")
-
-    try:
-        # Supprimer dans Supabase Storage
-        if doc.pdf_path:
-            pdf_name = Path(doc.pdf_path).name  # extrait le nom du fichier
-            supabase.storage.from_("uploads").remove([pdf_name])
-        if doc.couverture_path:
-            cover_name = Path(doc.couverture_path).name
-            supabase.storage.from_("uploads").remove([cover_name])
-    except Exception as e:
-        print(f"Erreur suppression fichier Supabase: {e}")
-
-    await db.delete(doc)
-    await db.commit()
-    return {"status": "success", "message": "Document et fichiers supprimés"}
-
-
-# 🔹 Désactiver un document
-@router.put("/{doc_id}/disable")
-async def desactiver_document(doc_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Document).where(Document.id == doc_id))
-    doc = result.scalars().first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document introuvable")
-    doc.is_deleted = True
-    await db.commit()
-    return {"status": "success", "message": "Document désactivé"}
-
-# 🔹 Récupérer les 10 livres les plus populaires
-@router.get("/populaires", response_model=list[DocumentResponse])
-async def get_livres_populaires(db: AsyncSession = Depends(get_db)):
+    """Les plus aimés d'abord (à égalité : le plus récent). `cursor` = position dans le classement."""
     stmt = (
         select(Document)
-        .where(Document.achats > 0, Document.is_deleted == False)
-        .order_by(Document.achats.desc())
-        .limit(10)
+        .join(Like, Like.document_id == Document.id)
+        .where(VISIBLE)
+        .group_by(Document.id)
+        .order_by(func.count(Like.id).desc(), Document.id.desc())
+        .offset(cursor)
+        .limit(limit)
     )
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    docs = list((await db.execute(stmt)).scalars().all())
+    items = await build_documents(db, docs, viewer.id)
+    return Page(items=items, next_cursor=cursor + limit if len(docs) == limit else None)
 
-# 🔹 Ajouter un livre dans la bibliothèque
-@router.post("/users/{user_id}/bibliotheque/{doc_id}", status_code=status.HTTP_201_CREATED)
-async def ajouter_dans_bibliotheque(user_id: int, doc_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
-    result = await db.execute(select(Document).where(Document.id == doc_id))
-    document = result.scalars().first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document introuvable")
-
-    if document.vendeur_id == user_id:
-        raise HTTPException(status_code=400, detail="Un vendeur ne peut pas acheter son propre livre")
-
-    result = await db.execute(
-        select(Bibliotheque).where(Bibliotheque.user_id == user_id, Bibliotheque.document_id == doc_id)
-    )
-    deja = result.scalars().first()
-    if deja:
-        return {"status": "ok", "message": "Livre déjà présent dans la bibliothèque"}
-
-    entree = Bibliotheque(user_id=user_id, document_id=doc_id)
-    db.add(entree)
-
-    document.achats = (document.achats or 0) + 1
-
-    result = await db.execute(select(User).where(User.id == document.vendeur_id))
-    vendeur = result.scalars().first()
-    if vendeur:
-        vendeur.ventes = (vendeur.ventes or 0) + 1
-
-    await db.commit()
-    return {"status": "created", "message": "Livre ajouté à la bibliothèque et comptabilisé chez le vendeur"}
-
-# 🔹 Récupérer les documents vendus par un utilisateur
-@router.get("/users/{vendeur_id}/ventes", response_model=list[DocumentResponse])
-async def get_documents_vendus(vendeur_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == vendeur_id))
-    vendeur = result.scalars().first()
-    if not vendeur:
-        raise HTTPException(status_code=404, detail="Vendeur introuvable")
-
-    result = await db.execute(select(Document).where(Document.vendeur_id == vendeur_id, Document.achats > 0))
-    return result.scalars().all()
-
-# 🔹 Récupérer tous les livres de la bibliothèque d’un utilisateur
-@router.get("/users/{user_id}/bibliotheque", response_model=list[Documentbiblio])
-async def get_bibliotheque(user_id: int, db: AsyncSession = Depends(get_db)):
-    user = await db.scalar(select(User).where(User.id == user_id))
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
+# ------------------------------------------------------------------ bibliothèque personnelle
+@router.get("/bibliotheque", response_model=list[DocumentOut])
+async def ma_bibliotheque(db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
+    """La liste complète (sans pagination) : l'application la garde en local."""
     stmt = (
         select(Document)
         .join(Bibliotheque, Bibliotheque.document_id == Document.id)
-        .where(Bibliotheque.user_id == user_id)
+        .where(Bibliotheque.user_id == user.id, VISIBLE)
+        .order_by(Bibliotheque.id.desc())
     )
-    result = await db.execute(stmt)
-    docs = result.scalars().all()
-
-    # 🔹 Transformer en réponses avec URLs Supabase
-    return [Documentbiblio.from_orm_with_urls(doc) for doc in docs]
+    docs = list((await db.execute(stmt)).scalars().all())
+    return await build_documents(db, docs, user.id)
 
 
-
-# Recuperer les document desactivé
-@router.get("/desactives", response_model=list[DocumentResponse])
-async def get_documents_desactives(
-    skip: int = 0,
-    limit: int = 20,
-    db: AsyncSession = Depends(get_db),
+@router.post("/bibliotheque/{doc_id}", response_model=Message, status_code=201)
+async def ajouter_a_la_bibliotheque(
+    doc_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)
 ):
-    query = (
-        select(Document)
-        .where(Document.is_deleted == True)
-        .offset(skip)
-        .limit(limit)
+    await get_visible_document(db, doc_id, user)
+    exists = (
+        await db.execute(
+            select(Bibliotheque).where(Bibliotheque.user_id == user.id, Bibliotheque.document_id == doc_id)
+        )
+    ).scalars().first()
+    if exists is None:
+        db.add(Bibliotheque(user_id=user.id, document_id=doc_id))
+        await db.commit()
+    return Message(message="Document ajouté à la bibliothèque")
+
+
+@router.delete("/bibliotheque/{doc_id}", response_model=Message)
+async def retirer_de_la_bibliotheque(
+    doc_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)
+):
+    await db.execute(delete(Bibliotheque).where(Bibliotheque.user_id == user.id, Bibliotheque.document_id == doc_id))
+    await db.commit()
+    return Message(message="Document retiré de la bibliothèque")
+
+
+@router.delete("/commentaires/{comment_id}", response_model=Message)
+async def supprimer_commentaire(
+    comment_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)
+):
+    """Peut être supprimé par son auteur, par l'auteur du document ou par un admin."""
+    comment = (await db.execute(select(Comment).where(Comment.id == comment_id))).scalars().first()
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Commentaire introuvable")
+    doc = (await db.execute(select(Document).where(Document.id == comment.document_id))).scalars().first()
+    allowed = user.role == "admin" or comment.user_id == user.id or (doc is not None and doc.auteur_id == user.id)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Suppression non autorisée")
+    await db.delete(comment)
+    await db.commit()
+    return Message(message="Commentaire supprimé")
+
+
+# ------------------------------------------------------------------ un document
+@router.get("/{doc_id}", response_model=DocumentOut)
+async def detail(doc_id: int, db: AsyncSession = Depends(get_db), viewer: User = Depends(current_user)):
+    doc = await get_visible_document(db, doc_id, viewer)
+    return (await build_documents(db, [doc], viewer.id))[0]
+
+
+@router.get("/{doc_id}/fichier")
+async def telecharger(doc_id: int, db: AsyncSession = Depends(get_db), viewer: User = Depends(current_user)):
+    """Le PDF n'est jamais public : il faut être connecté pour le télécharger."""
+    doc = await get_visible_document(db, doc_id, viewer)
+    path = storage.pdf_path(doc.pdf_file)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", doc.titre).strip("_") or "document"
+    return FileResponse(path, media_type="application/pdf", filename=f"{safe_name}.pdf")
+
+
+@router.delete("/{doc_id}", response_model=Message)
+async def supprimer(doc_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
+    doc = (await db.execute(select(Document).where(Document.id == doc_id))).scalars().first()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    if doc.auteur_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Vous ne pouvez supprimer que vos propres documents")
+
+    pdf_file, cover_file = doc.pdf_file, doc.cover_file
+    await db.delete(doc)  # likes, commentaires et bibliothèques partent avec (ON DELETE CASCADE)
+    await db.commit()
+    storage.delete_files([pdf_file], [cover_file])
+    return Message(message="Document supprimé")
+
+
+# ------------------------------------------------------------------ likes
+async def _like_state(db: AsyncSession, doc_id: int, liked: bool) -> LikeOut:
+    n = (await db.execute(select(func.count()).select_from(Like).where(Like.document_id == doc_id))).scalar() or 0
+    return LikeOut(liked=liked, nb_likes=n)
+
+
+@router.post("/{doc_id}/like", response_model=LikeOut)
+async def aimer(doc_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
+    await get_visible_document(db, doc_id, user)
+    exists = (
+        await db.execute(select(Like).where(Like.user_id == user.id, Like.document_id == doc_id))
+    ).scalars().first()
+    if exists is None:
+        db.add(Like(user_id=user.id, document_id=doc_id))
+        await db.commit()
+    return await _like_state(db, doc_id, True)
+
+
+@router.delete("/{doc_id}/like", response_model=LikeOut)
+async def ne_plus_aimer(doc_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
+    await db.execute(delete(Like).where(Like.user_id == user.id, Like.document_id == doc_id))
+    await db.commit()
+    return await _like_state(db, doc_id, False)
+
+
+# ------------------------------------------------------------------ commentaires
+@router.get("/{doc_id}/commentaires", response_model=Page[CommentOut])
+async def commentaires(
+    doc_id: int,
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(current_user),
+):
+    await get_visible_document(db, doc_id, viewer)
+    stmt = select(Comment, User).join(User, User.id == Comment.user_id).where(Comment.document_id == doc_id)
+    if cursor:
+        stmt = stmt.where(Comment.id < cursor)
+    rows = (await db.execute(stmt.order_by(Comment.id.desc()).limit(limit))).all()
+    items = [
+        CommentOut(
+            id=c.id,
+            document_id=c.document_id,
+            user_id=c.user_id,
+            auteur_nom=nom_complet(u),
+            contenu=c.contenu,
+            created_at=c.created_at,
+        )
+        for c, u in rows
+    ]
+    return Page(items=items, next_cursor=items[-1].id if len(items) == limit else None)
+
+
+@router.post("/{doc_id}/commentaires", response_model=CommentOut, status_code=201)
+async def commenter(
+    doc_id: int, payload: CommentIn, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)
+):
+    await get_visible_document(db, doc_id, user)
+    contenu = payload.contenu.strip()
+    if not contenu:
+        raise HTTPException(status_code=400, detail="Le commentaire est vide")
+    comment = Comment(user_id=user.id, document_id=doc_id, contenu=contenu)
+    db.add(comment)
+    await db.commit()
+    await db.refresh(comment)
+    return CommentOut(
+        id=comment.id,
+        document_id=doc_id,
+        user_id=user.id,
+        auteur_nom=nom_complet(user),
+        contenu=comment.contenu,
+        created_at=comment.created_at,
     )
-    result = await db.execute(query)
-    docs = result.scalars().all()
-    return docs

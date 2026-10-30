@@ -1,224 +1,179 @@
-from pydantic import BaseModel, EmailStr
-from datetime import datetime
-from typing import Optional
-from app.models import Document
+from datetime import datetime, timezone
+from typing import Annotated, Generic, Optional, TypeVar
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+
+T = TypeVar("T")
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    """La base stocke des dates UTC sans fuseau : on les renvoie avec un « Z »
+    pour que l'application les convertisse correctement à l'heure locale."""
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
-class ResendCodeRequest(BaseModel):
-    email: str
+
+UtcDateTime = Annotated[datetime, AfterValidator(_as_utc)]
 
 
-class VerifyRequest(BaseModel):
-    email: str   # l'identifiant de l'utilisateur (email ou téléphone)
-    code: str    # le code de vérification à 6 chiffres
+class Page(BaseModel, Generic[T]):
+    """Liste paginée. `next_cursor` est à renvoyer tel quel pour obtenir la page
+    suivante ; null = fin de la liste."""
 
-class LogoutRequest(BaseModel):
-    user_id: int | None = None   # optionnel si on utilise le token
-    device_type: str | None = None  # "mobile" ou "pc", optionnel
+    items: list[T]
+    next_cursor: Optional[int] = None
 
-class UserStatusResponse(BaseModel):
-    id: int
-    username: str
-    connected: bool
-    device_type: str | None
 
-class RoleUpdate(BaseModel):
-    new_role: str
-    password: str   # 🔹 ajoute le champ mot de passe
-    
-class ChangePasswordRequest(BaseModel):
-    user_id: str
-    old_password: str
-    new_password: str
+# ----------------------------------------------------------------- entrées
+class RegisterIn(BaseModel):
+    nom: str = Field(min_length=1, max_length=100)
+    prenom: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    telephone: Optional[str] = Field(default=None, max_length=30)
+    pays: Optional[str] = Field(default=None, max_length=100)
+    profession: Optional[str] = Field(default=None, max_length=150)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginIn(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)  # email ou téléphone
+    password: str = Field(min_length=1, max_length=128)
+    device_id: str = Field(default="", max_length=100)
+    device_name: str = Field(default="", max_length=150)
+
 
 class ProfileUpdate(BaseModel):
-    email: EmailStr
-    pays: str
-    profession: str
-
-class ForgotPasswordRequest(BaseModel):
-    identifier: str
-
-class PasswordUpdate(BaseModel):
-    identifier: str   # email ou téléphone
-    code: str
-    new_password: str
-
-class VerifyResetCodeRequest(BaseModel):
-    identifier: str   # email ou téléphone
-    code: str         # code de vérification
+    nom: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    prenom: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    telephone: Optional[str] = Field(default=None, max_length=30)
+    pays: Optional[str] = Field(default=None, max_length=100)
+    profession: Optional[str] = Field(default=None, max_length=150)
 
 
-# 🔹 Schéma pour l'inscription
-class UserCreate(BaseModel):
+class ChangePasswordIn(BaseModel):
+    old_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ForgotPasswordIn(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)
+
+
+class ResetPasswordIn(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)
+    code: str = Field(min_length=1, max_length=20)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class DeleteAccountIn(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class CommentIn(BaseModel):
+    contenu: str = Field(min_length=1, max_length=1000)
+
+
+class RoleIn(BaseModel):
+    role: str = Field(pattern="^(membre|admin)$")
+
+
+# ----------------------------------------------------------------- sorties
+class UserOut(BaseModel):
+    """Compte complet : visible par son propriétaire et par les administrateurs."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
     nom: str
     prenom: str
-    email: EmailStr
-    telephone: str
-    pays: str
-    profession: str
-    password: str
-
-class UserCreateAdmin(BaseModel):
-    nom: str
-    prenom: str
-    email: EmailStr
-    telephone: str
-    pays: str
-    profession: str
-    password: str
+    email: str
+    telephone: Optional[str] = None
+    pays: Optional[str] = None
+    profession: Optional[str] = None
     role: str
+    created_at: Optional[UtcDateTime] = None
 
-# 🔹 Schéma pour la réponse utilisateur (sans mot de passe)
-class UserResponse(BaseModel):
+
+class LoginOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class PublicUser(BaseModel):
+    """Profil public : jamais d'email, de téléphone ni de rôle."""
+
     id: int
     nom: str
     prenom: str
-    email: EmailStr
-    telephone: str
-    pays: str
-    profession: str
-    date_publication: Optional[datetime] = None  #  ajouté
+    pays: Optional[str] = None
+    profession: Optional[str] = None
+    created_at: Optional[UtcDateTime] = None
+    nb_documents: int = 0
+    nb_abonnes: int = 0
+    nb_abonnements: int = 0
+    is_following: bool = False
 
 
-
-    class Config:
-        from_attributes = True # permet de convertir un objet SQLAlchemy en JSON
-
-# 🔹 Schéma pour la connexion
-class LoginRequest(BaseModel):
-    identifier: str
-    password: str
-    device_id: str    # identifiant unique de l’appareil
-    device_type: str # "mobile" ou "pc"
+class DeviceOut(BaseModel):
+    id: int
+    device_name: str
+    created_at: Optional[UtcDateTime] = None
+    last_seen: Optional[UtcDateTime] = None
+    current: bool = False
 
 
-
-class DocumentCreate(BaseModel):
-    titre: str
-    description: str
-    prix: int
-    categorie: str
-    langue: str
-    domaine: str
-    pdf_path: str
-    couverture_path: str
-
-class DocumentResponse(BaseModel):
+class DocumentOut(BaseModel):
     id: int
     titre: str
-    description: str
-    prix: int
+    description: str = ""
     categorie: str
     langue: str
-    domaine: str
-    pdfUrl: Optional[str] = None
-    imageUrl: Optional[str] = None
-    vendeur_id: int
-    achats: int
-    date_publication: Optional[datetime] = None
+    domaine: str = ""
+    couverture_url: str          # chemin relatif, ex. /covers/abc.jpg
+    auteur_id: int
+    auteur_nom: str = ""
+    nb_likes: int = 0
+    nb_commentaires: int = 0
+    nb_ajouts: int = 0           # nombre de bibliothèques qui contiennent le document
+    liked: bool = False          # le lecteur connecté a-t-il aimé ce document ?
+    dans_bibliotheque: bool = False
+    is_disabled: bool = False
+    created_at: Optional[UtcDateTime] = None
 
-    class Config:
-        from_attributes = True
 
-class Documentbiblio(BaseModel):
+class CommentOut(BaseModel):
     id: int
-    titre: str
-    description: str
-    prix: int
-    categorie: str
-    langue: str
-    domaine: str
-    pdfUrl: Optional[str] = None
-    imageUrl: Optional[str] = None
-    vendeur_id: int
-    achats: int
-    date_publication: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-    @classmethod
-    def from_orm_with_urls(cls, doc: "Document"):
-        return cls(
-            id=doc.id,
-            titre=doc.titre,
-            description=doc.description,
-            prix=doc.prix,
-            categorie=doc.categorie,
-            langue=doc.langue,
-            domaine=doc.domaine,
-            pdfUrl=doc.pdf_path,          # ⚠️ déjà une URL complète
-            imageUrl=doc.couverture_path, # ⚠️ déjà une URL complète
-            vendeur_id=doc.vendeur_id,
-            achats=doc.achats,
-            date_publication=doc.date_publication,
-        )
-
-
-
-# Wallet et Transaction
-
-class WalletBase(BaseModel):
-    vendeur_id: int
-    solde: int = 0
-
-class WalletCreate(WalletBase):
-    pass
-
-class Wallet(WalletBase):
-    id: int
-    date_creation: datetime
-
-    class Config:
-        from_attributes = True
-
-class TransactionBase(BaseModel):
-    wallet_id: int | None = None
-    acheteur_id: Optional[int] 
-    type: str   # "paiement" ou "retrait"
-    montant: int
-    document_id: int | None = None
-    document_nom: str | None = None
-    status: str = "success"
-    reference: str | None = None
-
-class TransactionCreate(TransactionBase):
-    pass
-
-
-class AchatCreate(BaseModel):
-    montant: int
     document_id: int
-    document_nom: str
-    reference: str
-    acheteur_id: int
+    user_id: int
+    auteur_nom: str
+    contenu: str
+    created_at: Optional[UtcDateTime] = None
 
-class Transaction(TransactionBase):
-    id: int
-    date_transaction: datetime
 
-    class Config:
-        from_attributes = True
+class LikeOut(BaseModel):
+    liked: bool
+    nb_likes: int
 
-class WalletWithTransactions(Wallet):
-    transactions: list[Transaction] = []
 
-class RetraitCreate(BaseModel):
-    wallet_id: int
-    type: str
-    montant: int
-    status: str
-    reference: str
+class FollowOut(BaseModel):
+    is_following: bool
+    nb_abonnes: int
 
-class RetraitResponse(BaseModel):
-    id: int
-    wallet_id: int
-    type: str
-    montant: int
-    status: str
-    reference: Optional[str]
-    date_transaction: datetime
+
+class StatsOut(BaseModel):
+    total_utilisateurs: int
+    total_documents: int
+    documents_desactives: int
+    total_likes: int
+    total_commentaires: int
+    total_abonnements: int
+    ajouts_bibliotheque: int
+    connexions_actives: int
+    nouveaux_documents_mois: int
+    nouveaux_documents_annee: int
+
+
+class Message(BaseModel):
     message: str
-    solde_restant: int

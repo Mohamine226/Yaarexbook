@@ -33,6 +33,11 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Données sensibles et locales
+lapi/data/secret_key
+lapi/data/yaarexbook.db
+lapi/.env
+
 # Symbolication related
 app.*.symbols
 

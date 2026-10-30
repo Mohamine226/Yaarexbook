@@ -1,182 +1,109 @@
-import random
-from fastapi import APIRouter, Depends, HTTPException # type: ignore
-from sqlalchemy.ext.asyncio import AsyncSession # type: ignore
-from sqlalchemy.future import select # type: ignore
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
-from app.models.user import User
-from app.models import PasswordResetCode, transaction
-from app.schemas import RoleUpdate, ForgotPasswordRequest
-from datetime import datetime, timedelta
-import re
-from app.services.messaging import send_reset_email, send_reset_sms
-from passlib.context import CryptContext
-import app.models as models 
-
-
+from app.models import Follow, User
+from app.schemas import FollowOut, Page, PublicUser
+from app.security import current_user
+from app.services.serializers import build_people, escape_like
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(password: str, hashed: str) -> bool:
-    return pwd_context.verify(password, hashed)
+async def _people_page(db: AsyncSession, stmt, cursor: int, limit: int, viewer: User) -> Page[PublicUser]:
+    users = list((await db.execute(stmt.offset(cursor).limit(limit))).scalars().all())
+    items = await build_people(db, users, viewer.id)
+    return Page(items=items, next_cursor=cursor + limit if len(users) == limit else None)
 
 
-
-def is_password_valid(password: str) -> bool:
-    """
-    Vérifie que le mot de passe contient :
-    - au moins 8 caractères
-    - une majuscule
-    - une minuscule
-    - un chiffre
-    - un caractère spécial
-    """
-    regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$'
-    return re.match(regex, password) is not None
-
-
-
-# 🔹 Vérifier si un utilisateur existe par email ou téléphone
-@router.get("/check")
-async def check_user(identifier: str, db: AsyncSession = Depends(get_db)):
-    """
-    Vérifie si un utilisateur existe par email ou numéro de téléphone
-    """
-    result = await db.execute(
-        select(User).where((User.email == identifier) | (User.telephone == identifier))
-    )
-    user = result.scalars().first()
-    return {"exists": bool(user)}
-
-# 🔹 Liste des utilisateurs
-@router.get("/")
-async def list_users(
-    skip: int = 0,
-    limit: int = 20,
+@router.get("/search", response_model=Page[PublicUser])
+async def search_people(
+    q: str = Query(min_length=2, max_length=100),
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(current_user),
 ):
-    result = await db.execute(
-        select(User).offset(skip).limit(limit)
+    pattern = f"%{escape_like(q.strip())}%"
+    stmt = (
+        select(User)
+        .where(
+            or_(
+                User.nom.ilike(pattern, escape="\\"),
+                User.prenom.ilike(pattern, escape="\\"),
+                User.profession.ilike(pattern, escape="\\"),
+            )
+        )
+        .order_by(User.id)
     )
-    users = result.scalars().all()
-    return users   # ✅ renvoie directement les objets User
+    return await _people_page(db, stmt, cursor, limit, viewer)
 
 
+@router.get("/{user_id}/profile", response_model=PublicUser)
+async def profile(user_id: int, db: AsyncSession = Depends(get_db), viewer: User = Depends(current_user)):
+    user = (await db.execute(select(User).where(User.id == user_id))).scalars().first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    return (await build_people(db, [user], viewer.id))[0]
 
 
-# 🔹 Supprimer un utilisateur par ID
-@router.delete("/{user_id}")
-async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
-    if not user:
+async def _followers(db: AsyncSession, user_id: int) -> int:
+    return (await db.execute(select(func.count()).select_from(Follow).where(Follow.followed_id == user_id))).scalar() or 0
+
+
+@router.post("/{user_id}/follow", response_model=FollowOut)
+async def follow(user_id: int, db: AsyncSession = Depends(get_db), me: User = Depends(current_user)):
+    if user_id == me.id:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas vous suivre vous-même")
+    if (await db.execute(select(User.id).where(User.id == user_id))).first() is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
-    await db.delete(user)
+    exists = (
+        await db.execute(select(Follow).where(Follow.follower_id == me.id, Follow.followed_id == user_id))
+    ).scalars().first()
+    if exists is None:
+        db.add(Follow(follower_id=me.id, followed_id=user_id))
+        await db.commit()
+    return FollowOut(is_following=True, nb_abonnes=await _followers(db, user_id))
+
+
+@router.delete("/{user_id}/follow", response_model=FollowOut)
+async def unfollow(user_id: int, db: AsyncSession = Depends(get_db), me: User = Depends(current_user)):
+    await db.execute(Follow.__table__.delete().where(Follow.follower_id == me.id, Follow.followed_id == user_id))
     await db.commit()
-    return {"status": "success", "message": f"Utilisateur {user_id} supprimé"}
+    return FollowOut(is_following=False, nb_abonnes=await _followers(db, user_id))
 
 
-# 🔹 Mot de passe oublié (email ou numéro)
-# 1. Demande de reset
-@router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
-    identifier = payload.identifier
-
-    # 🔹 Vérifier si l'utilisateur existe
-    result = await db.execute(
-        select(User).where((User.email == identifier) | (User.telephone == identifier))
+@router.get("/{user_id}/abonnes", response_model=Page[PublicUser])
+async def abonnes(
+    user_id: int,
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(current_user),
+):
+    stmt = (
+        select(User)
+        .join(Follow, Follow.follower_id == User.id)
+        .where(Follow.followed_id == user_id)
+        .order_by(Follow.id.desc())
     )
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
-    # 🔹 Générer le code
-    code = str(random.randint(100000, 999999))
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
-
-    reset_code = PasswordResetCode(user_id=user.id, code=code, expires_at=expires_at)
-    db.add(reset_code)
-    await db.commit()
-
-    #  Affichage du code dans la console (DEV uniquement)
-    print(f" Code de réinitialisation pour {identifier}: {code}")
-
-    #  Envoi par email si identifiant = email
-    if identifier == user.email:
-        await send_reset_email(user.email, code)
-
-    #  Envoi par SMS si identifiant = téléphone
-    else:
-        send_reset_sms(user.telephone, code)
-
-    return {"status": "success", "message": "Code généré et affiché en console"}
-
-# 🔹 Changement de mot de passe
-@router.post("/change-password")
-async def change_password(user_id: int, old_password: str, new_password: str, db: AsyncSession = Depends(get_db)):
-    if not is_password_valid(new_password):
-        raise HTTPException(status_code=400, detail="Mot de passe trop faible")
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
-    if not verify_password(old_password, user.password):
-        raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
-
-    # Stockage du nouveau mot de passe hashé
-    user.password = hash_password(new_password)
-
-    await db.commit()
-    await db.refresh(user)
-
-    return {"status": "success", "message": "Mot de passe changé avec succès"}
+    return await _people_page(db, stmt, cursor, limit, viewer)
 
 
-# 🔹 Changer le rôle (acheteur → vendeur définitif)
-@router.put("/{user_id}/change-role")
-async def change_role(user_id: int, payload: RoleUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-
-    # Vérifie le mot de passe
-    if not verify_password(payload.password, user.password):
-        raise HTTPException(status_code=400, detail="Mot de passe incorrect")
-
-    # Empêche de revenir acheteur si déjà vendeur
-    if user.role == "vendeur":
-        raise HTTPException(status_code=400, detail="Impossible de revenir acheteur")
-
-    # Vérifie que le rôle demandé est valide
-    if payload.new_role not in ["acheteur", "vendeur"]:
-        raise HTTPException(status_code=400, detail="Rôle invalide")
-
-    # 🔹 Si le nouveau rôle est vendeur
-    if payload.new_role == "vendeur":
-        user.role = "vendeur"
-        await db.commit()
-        await db.refresh(user)
-
-        # 🔹 Créer automatiquement un wallet pour ce vendeur
-        new_wallet = transaction.Wallet(user_id=user.id, solde=0.0)  # ✅ correction ici
-        db.add(new_wallet)
-        await db.commit()
-        await db.refresh(new_wallet)
-
-        return {
-            "status": "success",
-            "message": "Rôle changé en vendeur et wallet créé",
-            "wallet_id": new_wallet.id,
-            "solde": new_wallet.solde
-        }
-
-    return {"status": "error", "message": "Le rôle ne peut être modifié que vers vendeur"}
+@router.get("/{user_id}/abonnements", response_model=Page[PublicUser])
+async def abonnements(
+    user_id: int,
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(current_user),
+):
+    stmt = (
+        select(User)
+        .join(Follow, Follow.followed_id == User.id)
+        .where(Follow.follower_id == user_id)
+        .order_by(Follow.id.desc())
+    )
+    return await _people_page(db, stmt, cursor, limit, viewer)

@@ -1,35 +1,36 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
+
+from app.config import DATABASE_URL
 
 
-# 🔹 URL de connexion SQLite en mode async
-#SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./users.db"
+class Base(DeclarativeBase):
+    pass
 
-#SQLALCHEMY_DATABASE_URL = "postgresql+asyncpg://mohamine:6414Gnam1@localhost:5432/daagabase"
 
-#SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
-raw_url = os.getenv("DATABASE_URL")
-SQLALCHEMY_DATABASE_URL = raw_url.replace("postgresql://", "postgresql+asyncpg://")
+engine = create_async_engine(DATABASE_URL, echo=False)
 
-# Création du moteur async
-engine = create_async_engine(
-    SQLALCHEMY_DATABASE_URL, echo=True
-)
 
-# Création de la session async
-AsyncSessionLocal = sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    autoflush=False,
-    autocommit=False,
-    expire_on_commit=False
-)
+@event.listens_for(engine.sync_engine, "connect")
+def _enable_foreign_keys(dbapi_connection, _record):
+    """SQLite n'applique pas les clés étrangères (ni ON DELETE CASCADE) par défaut."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
-# Base des modèles
-Base = declarative_base()
 
-# Dépendance pour obtenir une session DB
+SessionLocal = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+
+
 async def get_db():
-    async with AsyncSessionLocal() as session:
+    async with SessionLocal() as session:
         yield session
+
+
+async def create_tables() -> None:
+    """Crée toutes les tables si elles n'existent pas (aucune migration)."""
+    from app import models  # noqa: F401  (enregistre les modèles)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

@@ -11,8 +11,9 @@ class CoverImage extends StatelessWidget {
   final String? localPath;
   final double? width;
   final double? height;
+  final double radius;
 
-  const CoverImage({super.key, required this.url, this.localPath, this.width, this.height});
+  const CoverImage({super.key, required this.url, this.localPath, this.width, this.height, this.radius = 8});
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +39,6 @@ class CoverImage extends StatelessWidget {
     } else {
       image = placeholder;
     }
-    return ClipRRect(borderRadius: BorderRadius.circular(8), child: image);
+    return ClipRRect(borderRadius: BorderRadius.circular(radius), child: image);
   }
 }

@@ -10,6 +10,7 @@ import '../state/session.dart';
 import '../utils/format.dart';
 import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/expandable_text.dart';
 import 'comments_page.dart';
 import 'reader_page.dart';
 import 'user_profile_page.dart';
@@ -36,13 +37,27 @@ class _DocumentDetailPageState extends State<DocumentDetailPage> {
   bool _busy = false;
   String? _localCover;
 
+  // L'image grandit un peu quand on fait défiler la page vers le bas.
+  static const double _imageHeight = 250;
+  static const double _imageGrowth = 70;
+  final _scroll = ScrollController();
+  final _offset = ValueNotifier<double>(0);
+
   int get _userId => Session.instance.me.id;
   bool get _canDelete => _doc.auteurId == _userId || Session.instance.isAdmin;
 
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(() => _offset.value = _scroll.hasClients ? _scroll.offset.clamp(0, double.infinity) : 0);
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _offset.dispose();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -152,70 +167,88 @@ class _DocumentDetailPageState extends State<DocumentDetailPage> {
           ],
         ),
         body: ListView(
-          padding: const EdgeInsets.all(16),
+          controller: _scroll,
+          padding: const EdgeInsets.only(bottom: 24),
           children: [
-            Center(child: CoverImage(url: d.couvertureUrl, localPath: _localCover, width: 170, height: 240)),
-            const SizedBox(height: 16),
-            Text(d.titre, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => UserProfilePage(userId: d.auteurId, name: d.auteurNom)),
+            // Image pleine largeur, sans marges à gauche ni à droite
+            ValueListenableBuilder<double>(
+              valueListenable: _offset,
+              builder: (context, offset, _) => CoverImage(
+                url: d.couvertureUrl,
+                localPath: _localCover,
+                width: double.infinity,
+                height: _imageHeight + (offset * 0.35).clamp(0, _imageGrowth),
+                radius: 0,
               ),
-              child: Row(children: [
-                Avatar(d.auteurNom, radius: 14),
-                const SizedBox(width: 8),
-                Text(d.auteurNom, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
-                const SizedBox(width: 8),
-                Text(timeAgo(d.createdAt), style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-              ]),
             ),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 4, children: [
-              Chip(label: Text(d.categorie)),
-              Chip(label: Text(d.langue)),
-              if (d.domaine.isNotEmpty) Chip(label: Text(d.domaine)),
-              if (d.isDisabled) const Chip(label: Text('Désactivé par un administrateur')),
-            ]),
-            if (d.description.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(d.description, style: const TextStyle(fontSize: 15, height: 1.4)),
-            ],
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _reading ? null : _read,
-              icon: _reading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.menu_book),
-              label: Text(_reading ? 'Ouverture…' : 'Lire'),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-              onPressed: _busy ? null : _toggleLibrary,
-              icon: Icon(d.dansBibliotheque ? Icons.bookmark_remove_outlined : Icons.bookmark_add_outlined),
-              label: Text(d.dansBibliotheque ? 'Retirer de ma bibliothèque' : 'Ajouter à ma bibliothèque'),
-            ),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: _toggleLike,
-                  icon: Icon(d.liked ? Icons.favorite : Icons.favorite_border, color: d.liked ? Colors.red : null),
-                  label: Text('${d.nbLikes} J\'aime'),
-                ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(d.titre, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => UserProfilePage(userId: d.auteurId, name: d.auteurNom)),
+                    ),
+                    child: Row(children: [
+                      Avatar(d.auteurNom, radius: 14),
+                      const SizedBox(width: 8),
+                      Text(d.auteurNom, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 8),
+                      Text(timeAgo(d.createdAt), style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                    ]),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 8, runSpacing: 4, children: [
+                    Chip(label: Text(d.categorie)),
+                    Chip(label: Text(d.langue)),
+                    if (d.domaine.isNotEmpty) Chip(label: Text(d.domaine)),
+                    if (d.isDisabled) const Chip(label: Text('Désactivé par un administrateur')),
+                  ]),
+                  if (d.description.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ExpandableText(d.description, maxLines: 2, style: const TextStyle(fontSize: 15, height: 1.4)),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _reading ? null : _read,
+                    icon: _reading
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.menu_book),
+                    label: Text(_reading ? 'Ouverture…' : 'Lire'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                    onPressed: _busy ? null : _toggleLibrary,
+                    icon: Icon(d.dansBibliotheque ? Icons.bookmark_remove_outlined : Icons.bookmark_add_outlined),
+                    label: Text(d.dansBibliotheque ? 'Retirer de ma bibliothèque' : 'Ajouter à ma bibliothèque'),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: _toggleLike,
+                        icon: Icon(d.liked ? Icons.favorite : Icons.favorite_border, color: d.liked ? Colors.red : null),
+                        label: Text("${d.nbLikes} J'aime"),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: _comments,
+                        icon: const Icon(Icons.mode_comment_outlined),
+                        label: Text('${d.nbCommentaires} commentaires'),
+                      ),
+                    ),
+                  ]),
+                  Center(
+                    child: Text('${d.nbAjouts} bibliothèque(s)', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                  ),
+                ],
               ),
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: _comments,
-                  icon: const Icon(Icons.mode_comment_outlined),
-                  label: Text('${d.nbCommentaires} commentaires'),
-                ),
-              ),
-            ]),
-            Center(
-              child: Text('${d.nbAjouts} bibliothèque(s)', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             ),
           ],
         ),

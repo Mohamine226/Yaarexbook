@@ -48,6 +48,16 @@ async def build_documents(db: AsyncSession, docs: list[Document], viewer_id: int
         u.id: u for u in (await db.execute(select(User).where(User.id.in_(author_ids)))).scalars().all()
     }
 
+    # NOUVEAU : les auteurs que le lecteur suit (une seule requête pour toute la page)
+    suivis = {
+        r[0]
+        for r in (
+            await db.execute(
+                select(Follow.followed_id).where(Follow.follower_id == viewer_id, Follow.followed_id.in_(author_ids))
+            )
+        ).all()
+    }
+
     return [
         DocumentOut(
             id=d.id,
@@ -64,6 +74,8 @@ async def build_documents(db: AsyncSession, docs: list[Document], viewer_id: int
             nb_ajouts=ajouts.get(d.id, 0),
             liked=d.id in liked,
             dans_bibliotheque=d.id in in_library,
+            # NOUVEAU : None = mon propre document (pas de bouton Suivre)
+            auteur_suivi=None if d.auteur_id == viewer_id else (d.auteur_id in suivis),
             is_disabled=d.is_disabled,
             created_at=d.created_at,
         )
@@ -100,6 +112,7 @@ async def build_people(db: AsyncSession, users: list[User], viewer_id: int) -> l
             nb_abonnes=abonnes.get(u.id, 0),
             nb_abonnements=abonnements.get(u.id, 0),
             is_following=u.id in following,
+            is_me=u.id == viewer_id,
         )
         for u in users
     ]

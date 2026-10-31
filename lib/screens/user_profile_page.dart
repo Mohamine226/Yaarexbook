@@ -103,7 +103,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 ),
               ],
             ),
-            if (!widget.own) ...[
+            if (!widget.own && !p.isMe) ...[
               const SizedBox(height: 12),
               p.isFollowing
                   ? OutlinedButton(

@@ -25,15 +25,15 @@ class User {
   String get fullName => '$prenom $nom'.trim();
 
   factory User.fromJson(Map<String, dynamic> j) => User(
-        id: j['id'] as int,
-        nom: j['nom'] as String? ?? '',
-        prenom: j['prenom'] as String? ?? '',
-        email: j['email'] as String? ?? '',
-        telephone: j['telephone'] as String?,
-        pays: j['pays'] as String?,
-        profession: j['profession'] as String?,
-        role: j['role'] as String? ?? 'membre',
-      );
+    id: j['id'] as int,
+    nom: j['nom'] as String? ?? '',
+    prenom: j['prenom'] as String? ?? '',
+    email: j['email'] as String? ?? '',
+    telephone: j['telephone'] as String?,
+    pays: j['pays'] as String?,
+    profession: j['profession'] as String?,
+    role: j['role'] as String? ?? 'membre',
+  );
 }
 
 class Person {
@@ -46,6 +46,7 @@ class Person {
   final int nbAbonnes;
   final int nbAbonnements;
   final bool isFollowing;
+  final bool isMe;
 
   const Person({
     required this.id,
@@ -57,33 +58,35 @@ class Person {
     this.nbAbonnes = 0,
     this.nbAbonnements = 0,
     this.isFollowing = false,
+    this.isMe = false,
   });
 
   String get fullName => '$prenom $nom'.trim();
 
   Person copyWith({bool? isFollowing, int? nbAbonnes}) => Person(
-        id: id,
-        nom: nom,
-        prenom: prenom,
-        pays: pays,
-        profession: profession,
-        nbDocuments: nbDocuments,
-        nbAbonnes: nbAbonnes ?? this.nbAbonnes,
-        nbAbonnements: nbAbonnements,
-        isFollowing: isFollowing ?? this.isFollowing,
-      );
+    id: id,
+    nom: nom,
+    prenom: prenom,
+    pays: pays,
+    profession: profession,
+    nbDocuments: nbDocuments,
+    nbAbonnes: nbAbonnes ?? this.nbAbonnes,
+    nbAbonnements: nbAbonnements,
+    isFollowing: isFollowing ?? this.isFollowing,
+  );
 
   factory Person.fromJson(Map<String, dynamic> j) => Person(
-        id: j['id'] as int,
-        nom: j['nom'] as String? ?? '',
-        prenom: j['prenom'] as String? ?? '',
-        pays: j['pays'] as String?,
-        profession: j['profession'] as String?,
-        nbDocuments: j['nb_documents'] as int? ?? 0,
-        nbAbonnes: j['nb_abonnes'] as int? ?? 0,
-        nbAbonnements: j['nb_abonnements'] as int? ?? 0,
-        isFollowing: j['is_following'] as bool? ?? false,
-      );
+    id: j['id'] as int,
+    nom: j['nom'] as String? ?? '',
+    prenom: j['prenom'] as String? ?? '',
+    pays: j['pays'] as String?,
+    profession: j['profession'] as String?,
+    nbDocuments: j['nb_documents'] as int? ?? 0,
+    nbAbonnes: j['nb_abonnes'] as int? ?? 0,
+    nbAbonnements: j['nb_abonnements'] as int? ?? 0,
+    isFollowing: j['is_following'] as bool? ?? false,
+    isMe: j['is_me'] as bool? ?? false,
+  );
 }
 
 class Doc {
@@ -101,6 +104,7 @@ class Doc {
   final int nbAjouts;
   final bool liked;
   final bool dansBibliotheque;
+  final bool? auteurSuivi; // null = mon propre document (pas de bouton Suivre)
   final bool isDisabled;
   final DateTime? createdAt;
 
@@ -119,6 +123,7 @@ class Doc {
     this.nbAjouts = 0,
     this.liked = false,
     this.dansBibliotheque = false,
+    this.auteurSuivi,
     this.isDisabled = false,
     this.createdAt,
   });
@@ -128,6 +133,7 @@ class Doc {
     int? nbCommentaires,
     bool? liked,
     bool? dansBibliotheque,
+    bool? auteurSuivi,
     bool? isDisabled,
   }) =>
       Doc(
@@ -145,28 +151,30 @@ class Doc {
         nbAjouts: nbAjouts,
         liked: liked ?? this.liked,
         dansBibliotheque: dansBibliotheque ?? this.dansBibliotheque,
+        auteurSuivi: auteurSuivi ?? this.auteurSuivi,
         isDisabled: isDisabled ?? this.isDisabled,
         createdAt: createdAt,
       );
 
   factory Doc.fromJson(Map<String, dynamic> j) => Doc(
-        id: j['id'] as int,
-        titre: j['titre'] as String? ?? '',
-        description: j['description'] as String? ?? '',
-        categorie: j['categorie'] as String? ?? '',
-        langue: j['langue'] as String? ?? '',
-        domaine: j['domaine'] as String? ?? '',
-        couvertureUrl: j['couverture_url'] as String? ?? '',
-        auteurId: j['auteur_id'] as int,
-        auteurNom: j['auteur_nom'] as String? ?? '',
-        nbLikes: j['nb_likes'] as int? ?? 0,
-        nbCommentaires: j['nb_commentaires'] as int? ?? 0,
-        nbAjouts: j['nb_ajouts'] as int? ?? 0,
-        liked: j['liked'] as bool? ?? false,
-        dansBibliotheque: j['dans_bibliotheque'] as bool? ?? false,
-        isDisabled: j['is_disabled'] as bool? ?? false,
-        createdAt: _date(j['created_at']),
-      );
+    id: j['id'] as int,
+    titre: j['titre'] as String? ?? '',
+    description: j['description'] as String? ?? '',
+    categorie: j['categorie'] as String? ?? '',
+    langue: j['langue'] as String? ?? '',
+    domaine: j['domaine'] as String? ?? '',
+    couvertureUrl: j['couverture_url'] as String? ?? '',
+    auteurId: j['auteur_id'] as int,
+    auteurNom: j['auteur_nom'] as String? ?? '',
+    nbLikes: j['nb_likes'] as int? ?? 0,
+    nbCommentaires: j['nb_commentaires'] as int? ?? 0,
+    nbAjouts: j['nb_ajouts'] as int? ?? 0,
+    liked: j['liked'] as bool? ?? false,
+    dansBibliotheque: j['dans_bibliotheque'] as bool? ?? false,
+    auteurSuivi: j['auteur_suivi'] as bool?,
+    isDisabled: j['is_disabled'] as bool? ?? false,
+    createdAt: _date(j['created_at']),
+  );
 }
 
 class Comment {
@@ -187,13 +195,13 @@ class Comment {
   });
 
   factory Comment.fromJson(Map<String, dynamic> j) => Comment(
-        id: j['id'] as int,
-        documentId: j['document_id'] as int,
-        userId: j['user_id'] as int,
-        auteurNom: j['auteur_nom'] as String? ?? '',
-        contenu: j['contenu'] as String? ?? '',
-        createdAt: _date(j['created_at']),
-      );
+    id: j['id'] as int,
+    documentId: j['document_id'] as int,
+    userId: j['user_id'] as int,
+    auteurNom: j['auteur_nom'] as String? ?? '',
+    contenu: j['contenu'] as String? ?? '',
+    createdAt: _date(j['created_at']),
+  );
 }
 
 class Device {
@@ -212,12 +220,12 @@ class Device {
   });
 
   factory Device.fromJson(Map<String, dynamic> j) => Device(
-        id: j['id'] as int,
-        name: j['device_name'] as String? ?? 'Appareil',
-        createdAt: _date(j['created_at']),
-        lastSeen: _date(j['last_seen']),
-        current: j['current'] as bool? ?? false,
-      );
+    id: j['id'] as int,
+    name: j['device_name'] as String? ?? 'Appareil',
+    createdAt: _date(j['created_at']),
+    lastSeen: _date(j['last_seen']),
+    current: j['current'] as bool? ?? false,
+  );
 }
 
 class Stats {

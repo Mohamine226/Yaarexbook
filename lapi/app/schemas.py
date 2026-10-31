@@ -119,6 +119,7 @@ class PublicUser(BaseModel):
     nb_abonnes: int = 0
     nb_abonnements: int = 0
     is_following: bool = False
+    is_me: bool = False
 
 
 class DeviceOut(BaseModel):
@@ -146,6 +147,7 @@ class DocumentOut(BaseModel):
     dans_bibliotheque: bool = False
     is_disabled: bool = False
     created_at: Optional[UtcDateTime] = None
+    auteur_suivi: Optional[bool] = None  # None = c'est mon propre document
 
 
 class CommentOut(BaseModel):

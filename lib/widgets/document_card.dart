@@ -35,11 +35,32 @@ class _DocumentCardState extends State<DocumentCard> {
   late Doc doc = widget.doc;
   bool _busy = false;
   bool _expanded = false;
+  bool _followBusy = false;
 
   @override
   void didUpdateWidget(covariant DocumentCard old) {
     super.didUpdateWidget(old);
     if (old.doc != widget.doc) doc = widget.doc;
+  }
+
+  Future<void> _toggleFollow() async {
+    final current = doc.auteurSuivi;
+    if (current == null || _followBusy) return;
+    setState(() => _followBusy = true);
+    try {
+      if (current) {
+        await Api.unfollow(doc.auteurId);
+      } else {
+        await Api.follow(doc.auteurId);
+      }
+      if (mounted) {
+        setState(() => doc = doc.copyWith(auteurSuivi: !current));
+        widget.onChanged?.call(doc);
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    if (mounted) setState(() => _followBusy = false);
   }
 
   Future<void> _toggleLike() async {
@@ -89,6 +110,26 @@ class _DocumentCardState extends State<DocumentCard> {
     context,
     MaterialPageRoute(builder: (_) => UserProfilePage(userId: doc.auteurId, name: doc.auteurNom)),
   );
+
+  Widget _followButton() {
+    final following = doc.auteurSuivi!;
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.green.shade700,
+        side: const BorderSide(color: Colors.white),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: _followBusy ? null : _toggleFollow,
+      child: Text(
+        following ? 'Suivi' : 'Suivre',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
 
   /// Description repliée sur 2 lignes, « Voir plus » à droite de la 2ème ligne.
   /// Dépliée : « Voir moins » aligné à droite sous le texte.
@@ -176,7 +217,11 @@ class _DocumentCardState extends State<DocumentCard> {
                     ],
                   ),
                 ),
-                if (doc.isDisabled) const Chip(label: Text('Désactivé'), visualDensity: VisualDensity.compact),
+                if (doc.isDisabled) ...[
+                  const Chip(label: Text('Désactivé'), visualDensity: VisualDensity.compact),
+                  const SizedBox(width: 8),
+                ],
+                if (doc.auteurSuivi != null) _followButton(),
               ]),
             ),
           )

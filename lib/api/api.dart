@@ -30,6 +30,7 @@ class Api {
     required String prenom,
     required String email,
     required String password,
+    required String code,
     String? telephone,
     String? pays,
     String? profession,
@@ -39,10 +40,14 @@ class Api {
         'prenom': prenom,
         'email': email,
         'password': password,
+        'code': code,
         if (telephone != null && telephone.isNotEmpty) 'telephone': telephone,
         if (pays != null && pays.isNotEmpty) 'pays': pays,
         if (profession != null && profession.isNotEmpty) 'profession': profession,
       });
+
+  static Future<void> sendRegisterCode(String email) =>
+      ApiClient.post('/auth/register-code', auth: false, body: {'email': email});
 
   static Future<void> logout() => ApiClient.post('/auth/logout');
 

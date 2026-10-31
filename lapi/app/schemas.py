@@ -34,6 +34,11 @@ class RegisterIn(BaseModel):
     pays: Optional[str] = Field(default=None, max_length=100)
     profession: Optional[str] = Field(default=None, max_length=150)
     password: str = Field(min_length=8, max_length=128)
+    code: str = Field(min_length=1, max_length=20)  # à ajouter dans RegisterIn
+
+
+class SendCodeIn(BaseModel):
+    email: EmailStr
 
 
 class LoginIn(BaseModel):

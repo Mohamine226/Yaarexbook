@@ -56,7 +56,7 @@ class _FeedPageState extends State<FeedPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Yaarexbook'),
@@ -70,7 +70,7 @@ class _FeedPageState extends State<FeedPage> {
           children: [
             _list(_recent, 'Aucun document publié pour le moment.\nSoyez le premier !', Icons.menu_book_outlined),
             _list(_following, 'Suivez des personnes pour voir leurs publications ici.', Icons.group_outlined),
-            _list(_popular, 'Aucun document aimé pour le moment.', Icons.favorite_border),
+            //_list(_popular, 'Aucun document aimé pour le moment.', Icons.favorite_border),
           ],
         ),
       ),

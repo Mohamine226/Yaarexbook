@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import RESET_CODE_MAX_ATTEMPTS, RESET_CODE_MINUTES, SECRET_KEY
 from app.database import get_db
-from app.models import DeviceSession, Document, PasswordResetCode, User, utcnow
+from app.models import DeviceSession, Document, PasswordResetCode, User,EmailVerification , utcnow
 from app.schemas import (
     ChangePasswordIn,
     DeleteAccountIn,
@@ -23,10 +23,11 @@ from app.schemas import (
     RegisterIn,
     ResetPasswordIn,
     UserOut,
+    SendCodeIn,
 )
 from app.security import Auth, create_token, current_auth, current_user, hash_password, verify_password
 from app.services import storage
-from app.services.mailer import send_reset_code
+from app.services.mailer import send_reset_code, send_verification_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -47,6 +48,36 @@ async def find_user(db: AsyncSession, identifier: str) -> User | None:
 
 
 # ------------------------------------------------------------------ inscription / connexion
+def _email_code_hash(email: str, code: str) -> str:
+    return hashlib.sha256(f"{SECRET_KEY}:register:{email}:{code}".encode()).hexdigest()
+
+
+@router.post("/register-code", response_model=Message)
+async def register_code(payload: SendCodeIn, db: AsyncSession = Depends(get_db)):
+    """Étape 1 de l'inscription : envoie un code de confirmation à l'email."""
+    email = payload.email.lower()
+    if (await db.execute(select(User).where(User.email == email))).scalars().first():
+        raise HTTPException(status_code=409, detail="Cet email est déjà utilisé")
+
+    ok = Message(message="Un code de confirmation vient d'être envoyé par email")
+    last = (await db.execute(select(EmailVerification).where(EmailVerification.email == email))).scalars().first()
+    if last and utcnow() - last.created_at < timedelta(seconds=60):
+        return ok
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    await db.execute(delete(EmailVerification).where(EmailVerification.email == email))
+    db.add(
+        EmailVerification(
+            email=email,
+            code_hash=_email_code_hash(email, code),
+            expires_at=utcnow() + timedelta(minutes=RESET_CODE_MINUTES),
+        )
+    )
+    await db.commit()
+    await send_verification_code(email, code, RESET_CODE_MINUTES)
+    return ok
+
+
 @router.post("/register", response_model=UserOut, status_code=201)
 async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)):
     email = payload.email.lower()
@@ -57,6 +88,17 @@ async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)):
     if telephone and (await db.execute(select(User).where(User.telephone == telephone))).scalars().first():
         raise HTTPException(status_code=409, detail="Ce numéro de téléphone est déjà utilisé")
 
+    invalid = HTTPException(status_code=400, detail="Code invalide ou expiré")
+    entry = (await db.execute(select(EmailVerification).where(EmailVerification.email == email))).scalars().first()
+    if entry is None or entry.expires_at < utcnow():
+        raise invalid
+    if not hmac.compare_digest(entry.code_hash, _email_code_hash(email, payload.code.strip())):
+        entry.attempts += 1
+        if entry.attempts >= RESET_CODE_MAX_ATTEMPTS:
+            await db.delete(entry)
+        await db.commit()
+        raise invalid
+
     user = User(
         nom=payload.nom.strip(),
         prenom=payload.prenom.strip(),
@@ -65,12 +107,13 @@ async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)):
         pays=_clean(payload.pays),
         profession=_clean(payload.profession),
         password_hash=await hash_password(payload.password),
-        role="membre",  # un rôle n'est jamais choisi par l'utilisateur
+        role="membre",
     )
     db.add(user)
+    await db.delete(entry)
     try:
         await db.commit()
-    except IntegrityError:  # deux inscriptions simultanées
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Email ou téléphone déjà utilisé")
     await db.refresh(user)

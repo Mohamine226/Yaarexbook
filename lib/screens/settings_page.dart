@@ -66,7 +66,8 @@ class SettingsPage extends StatelessWidget {
     return ListenableBuilder(
       listenable: Session.instance,
       builder: (context, _) {
-        final me = Session.instance.me;
+        final me = Session.instance.user;
+        if (me == null) return const SizedBox.shrink();
         return Scaffold(
           backgroundColor: Colors.white,
           appBar: AppBar(title: const Text('Paramètres')),

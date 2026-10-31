@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../models/models.dart';
-import '../widgets/paginated_list.dart';
-import '../widgets/person_tile.dart';
+import '../../api/api.dart';
+import '../../models/models.dart';
+import '../../widgets/paginated_list.dart';
+import '../../widgets/person_tile.dart';
 
 /// Abonnés ou abonnements d'une personne.
 class PeopleListPage extends StatelessWidget {

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../app_config.dart';
-import '../state/local_library.dart';
-import '../state/session.dart';
-import '../widgets/common.dart';
-import 'admin/admin_page.dart';
-import 'change_password_page.dart';
+import '../../api/api.dart';
+import '../../app_config.dart';
+import '../../state/local_library.dart';
+import '../../state/session.dart';
+import '../../widgets/common.dart';
+import '../admin/admin_page.dart';
+import '../login/change_password_page.dart';
 import 'devices_page.dart';
 import 'edit_profile_page.dart';
 

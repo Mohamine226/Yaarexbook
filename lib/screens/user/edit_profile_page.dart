@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../state/session.dart';
-import '../utils/format.dart';
-import '../widgets/common.dart';
+import '../../api/api.dart';
+import '../../state/session.dart';
+import '../../utils/format.dart';
+import '../../widgets/common.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});

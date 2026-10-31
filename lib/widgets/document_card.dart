@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../models/models.dart';
-import '../screens/comments_page.dart';
-import '../screens/document_detail_page.dart';
-import '../screens/user_profile_page.dart';
+import '../screens/user/comments_page.dart';
+import '../screens/user/document_detail_page.dart';
+import '../screens/user/user_profile_page.dart';
 import '../utils/format.dart';
 import 'common.dart';
 import 'cover_image.dart';

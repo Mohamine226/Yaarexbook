@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../app_config.dart';
-import '../models/models.dart';
-import '../widgets/document_card.dart';
-import '../widgets/paginated_list.dart';
-import '../widgets/person_tile.dart';
+import '../../api/api.dart';
+import '../../app_config.dart';
+import '../../models/models.dart';
+import '../../widgets/document_card.dart';
+import '../../widgets/paginated_list.dart';
+import '../../widgets/person_tile.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../models/models.dart';
-import '../state/events.dart';
-import '../widgets/common.dart';
-import '../widgets/document_card.dart';
-import '../widgets/paginated_list.dart';
+import '../../api/api.dart';
+import '../../models/models.dart';
+import '../../state/events.dart';
+import '../../widgets/common.dart';
+import '../../widgets/document_card.dart';
+import '../../widgets/paginated_list.dart';
 import 'people_list_page.dart';
 import 'settings_page.dart';
 

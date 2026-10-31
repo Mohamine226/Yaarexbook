@@ -2,10 +2,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../app_config.dart';
-import '../utils/format.dart';
-import '../widgets/common.dart';
+import '../../api/api.dart';
+import '../../app_config.dart';
+import '../../utils/format.dart';
+import '../../widgets/common.dart';
 
 /// Publication d'un document : tout membre connecté peut publier.
 class PublishPage extends StatefulWidget {

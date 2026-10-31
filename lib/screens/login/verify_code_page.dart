@@ -3,35 +3,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../api/api.dart';
-import '../widgets/common.dart';
+import '../../api/api.dart';
+import '../../widgets/common.dart';
 
-/// Confirmation de l'email à l'inscription : le compte n'est créé qu'avec le bon code.
-class VerifyRegisterPage extends StatefulWidget {
-  final String nom;
-  final String prenom;
+/// Saisie du code reçu par email. Si le code est bon, le mot de passe est changé.
+class VerifyCodePage extends StatefulWidget {
   final String email;
-  final String password;
-  final String telephone;
-  final String pays;
-  final String profession;
-
-  const VerifyRegisterPage({
-    super.key,
-    required this.nom,
-    required this.prenom,
-    required this.email,
-    required this.password,
-    this.telephone = '',
-    this.pays = '',
-    this.profession = '',
-  });
+  final String newPassword;
+  const VerifyCodePage({super.key, required this.email, required this.newPassword});
 
   @override
-  State<VerifyRegisterPage> createState() => _VerifyRegisterPageState();
+  State<VerifyCodePage> createState() => _VerifyCodePageState();
 }
 
-class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
+class _VerifyCodePageState extends State<VerifyCodePage> {
   static const _length = 6;
   static const _cooldown = 60;
 
@@ -41,7 +26,7 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
   bool _resending = false;
 
   Timer? _timer;
-  int _seconds = _cooldown;
+  int _seconds = _cooldown; // le code vient d'être envoyé : on attend 1 minute
 
   @override
   void initState() {
@@ -79,21 +64,12 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
     }
     setState(() => _busy = true);
     try {
-      await Api.register(
-        nom: widget.nom,
-        prenom: widget.prenom,
-        email: widget.email,
-        password: widget.password,
-        telephone: widget.telephone,
-        pays: widget.pays,
-        profession: widget.profession,
-        code: code,
-      );
+      await Api.resetPassword(widget.email, code, widget.newPassword);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       Navigator.popUntil(context, (r) => r.isFirst); // retour à la connexion
       messenger.showSnackBar(
-        const SnackBar(content: Text('Compte créé : connectez-vous.')),
+        const SnackBar(content: Text('Mot de passe modifié : connectez-vous.')),
       );
     } catch (e) {
       if (mounted) {
@@ -107,7 +83,7 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
     if (_resending) return;
     setState(() => _resending = true);
     try {
-      await Api.sendRegisterCode(widget.email);
+      await Api.forgotPassword(widget.email);
       if (mounted) {
         _code.clear();
         showMsg(context, 'Un nouveau code a été envoyé.');
@@ -125,10 +101,11 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
     return '$m:$s';
   }
 
+  /// Une case par chiffre. Un champ invisible par-dessus récupère la saisie
+  /// (le collage et la touche effacer fonctionnent normalement).
   Widget _codeBoxes() {
     final scheme = Theme.of(context).colorScheme;
     final text = _code.text;
-    final current = text.length.clamp(0, _length - 1);
     return GestureDetector(
       onTap: () => _focus.requestFocus(),
       child: Stack(
@@ -145,8 +122,10 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (_focus.hasFocus && i == current) ? scheme.primary : Colors.grey.shade400,
-                      width: (_focus.hasFocus && i == current) ? 2 : 1,
+                      color: (_focus.hasFocus && i == text.length.clamp(0, _length - 1))
+                          ? scheme.primary
+                          : Colors.grey.shade400,
+                      width: (_focus.hasFocus && i == text.length.clamp(0, _length - 1)) ? 2 : 1,
                     ),
                   ),
                   child: Text(
@@ -184,7 +163,7 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Confirmation')),
+      appBar: AppBar(title: const Text('Vérification')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -200,7 +179,7 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Confirmez votre email',
+              'Vérifiez votre email',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
             ),
@@ -217,7 +196,7 @@ class _VerifyRegisterPageState extends State<VerifyRegisterPage> {
               onPressed: (_busy || _code.text.length != _length) ? null : _verify,
               child: _busy
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Créer mon compte'),
+                  : const Text('Valider'),
             ),
             const SizedBox(height: 16),
             Row(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../models/models.dart';
-import '../utils/format.dart';
-import '../widgets/common.dart';
+import '../../api/api.dart';
+import '../../models/models.dart';
+import '../../utils/format.dart';
+import '../../widgets/common.dart';
 
 /// Appareils connectés au compte. Plusieurs appareils peuvent l'être en même temps.
 class DevicesPage extends StatefulWidget {

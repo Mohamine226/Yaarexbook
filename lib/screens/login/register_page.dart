@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../utils/format.dart';
-import '../widgets/common.dart';
+import '../../api/api.dart';
+import '../../utils/format.dart';
+import '../../widgets/common.dart';
 import 'verify_register_page.dart';
 
 /// Inscription en 2 étapes, puis confirmation de l'email par code.

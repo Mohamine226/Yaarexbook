@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../app_config.dart';
-import '../state/session.dart';
-import '../utils/format.dart';
-import '../widgets/common.dart';
+import '../../app_config.dart';
+import '../../state/session.dart';
+import '../../utils/format.dart';
+import '../../widgets/common.dart';
 import 'forgot_password_page.dart';
 import 'register_page.dart';
 

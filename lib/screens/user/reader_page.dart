@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
-import '../utils/screen_guard.dart';
+import '../../utils/screen_guard.dart';
 
 /// Lecteur PDF. Les captures d'écran sont bloquées pendant la lecture.
 class ReaderPage extends StatefulWidget {

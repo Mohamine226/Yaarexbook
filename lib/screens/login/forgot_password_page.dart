@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../widgets/common.dart';
+import '../../api/api.dart';
+import '../../widgets/common.dart';
 import 'verify_code_page.dart';
 
 /// Une seule page : email, nouveau mot de passe, confirmation.

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../state/events.dart';
-import '../state/session.dart';
+import '../../state/events.dart';
+import '../../state/session.dart';
 import 'feed_page.dart';
 import 'library_page.dart';
 import 'publish_page.dart';

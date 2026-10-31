@@ -6,7 +6,7 @@ import '../../state/session.dart';
 import '../../widgets/common.dart';
 import '../../widgets/cover_image.dart';
 import '../../widgets/paginated_list.dart';
-import '../document_detail_page.dart';
+import '../user/document_detail_page.dart';
 
 /// Espace d'administration : statistiques, membres, modération des documents.
 class AdminPage extends StatefulWidget {

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../models/models.dart';
-import '../state/session.dart';
-import '../utils/format.dart';
-import '../widgets/common.dart';
-import '../widgets/paginated_list.dart';
+import '../../api/api.dart';
+import '../../models/models.dart';
+import '../../state/session.dart';
+import '../../utils/format.dart';
+import '../../widgets/common.dart';
+import '../../widgets/paginated_list.dart';
 
 class CommentsPage extends StatefulWidget {
   final Doc doc;

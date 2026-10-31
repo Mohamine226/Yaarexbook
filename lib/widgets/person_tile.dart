@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../models/models.dart';
-import '../screens/user_profile_page.dart';
+import '../screens/user/user_profile_page.dart';
 import '../state/session.dart';
 import 'common.dart';
 

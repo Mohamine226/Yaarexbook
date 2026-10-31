@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'screens/home_shell.dart';
-import 'screens/login_page.dart';
+import 'screens/user/home_shell.dart';
+import 'screens/login/login_page.dart';
 import 'state/session.dart';
 import 'theme.dart';
 

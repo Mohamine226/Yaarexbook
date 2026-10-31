@@ -2,12 +2,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../state/events.dart';
-import '../state/local_library.dart';
-import '../state/session.dart';
-import '../widgets/common.dart';
-import '../widgets/cover_image.dart';
+import '../../api/api.dart';
+import '../../state/events.dart';
+import '../../state/local_library.dart';
+import '../../state/session.dart';
+import '../../widgets/common.dart';
+import '../../widgets/cover_image.dart';
 import 'document_detail_page.dart';
 import 'reader_page.dart';
 

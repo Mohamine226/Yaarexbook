@@ -2,15 +2,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../models/models.dart';
-import '../state/events.dart';
-import '../state/local_library.dart';
-import '../state/session.dart';
-import '../utils/format.dart';
-import '../widgets/common.dart';
-import '../widgets/cover_image.dart';
-import '../widgets/expandable_text.dart';
+import '../../api/api.dart';
+import '../../models/models.dart';
+import '../../state/events.dart';
+import '../../state/local_library.dart';
+import '../../state/session.dart';
+import '../../utils/format.dart';
+import '../../widgets/common.dart';
+import '../../widgets/cover_image.dart';
+import '../../widgets/expandable_text.dart';
 import 'comments_page.dart';
 import 'reader_page.dart';
 import 'user_profile_page.dart';

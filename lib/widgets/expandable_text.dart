@@ -37,20 +37,25 @@ class _ExpandableTextState extends State<ExpandableText> {
 
   @override
   Widget build(BuildContext context) {
-    final base = widget.style ?? DefaultTextStyle.of(context).style;
+    final base = DefaultTextStyle.of(context).style.merge(widget.style);
     final linkStyle = base.copyWith(
       color: Theme.of(context).colorScheme.primary,
       fontWeight: FontWeight.w700,
     );
     final dir = Directionality.of(context);
+    final scaler = MediaQuery.textScalerOf(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
         bool fits(InlineSpan span) {
-          final p = TextPainter(text: span, maxLines: widget.maxLines, textDirection: dir)
-            ..layout(maxWidth: width);
+          final p = TextPainter(
+            text: span,
+            maxLines: widget.maxLines,
+            textDirection: dir,
+            textScaler: scaler,
+          )..layout(maxWidth: width);
           return !p.didExceedMaxLines;
         }
 

@@ -1,25 +1,37 @@
+
+"""Point d'entrée de l'API Yaarexbook."""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response, RedirectResponse
 from sqlalchemy import select
 
-from app.config import ADMIN_EMAIL, ADMIN_PASSWORD, COVER_DIR
-from app.database import SessionLocal, create_tables
+from app.config import ADMIN_EMAIL, ADMIN_PASSWORD
+from app.database import SessionLocal, close_database
 from app.models import User
 from app.routers import admin, auth, documents, users
 from app.security import hash_password
+from app.services import storage
 
 
 async def seed_admin() -> None:
     """Crée le premier administrateur à partir de ADMIN_EMAIL / ADMIN_PASSWORD."""
+
     if not ADMIN_EMAIL or not ADMIN_PASSWORD:
         return
+
     async with SessionLocal() as db:
-        if (await db.execute(select(User).where(User.email == ADMIN_EMAIL))).scalars().first():
+        existing_admin = (
+            await db.execute(
+                select(User).where(User.email == ADMIN_EMAIL)
+            )
+        ).scalars().first()
+
+        if existing_admin:
             return
+
         db.add(
             User(
                 nom="Admin",
@@ -29,15 +41,24 @@ async def seed_admin() -> None:
                 role="admin",
             )
         )
+
         await db.commit()
+
         print(f"[Yaarexbook] Administrateur créé : {ADMIN_EMAIL}")
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await create_tables()
-    await seed_admin()
-    yield
+    """Gestion du démarrage et de l'arrêt de l'API."""
+
+    try:
+        # Les tables doivent être créées par Alembic avant le démarrage.
+        await seed_admin()
+
+        yield
+
+    finally:
+        await close_database()
 
 
 app = FastAPI(
@@ -47,7 +68,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# L'authentification passe par l'en-tête Authorization (pas de cookies).
+
+# --------------------------------------------------
+# CORS
+# --------------------------------------------------
+
+# L'authentification passe par l'en-tête Authorization.
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -56,20 +83,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# --------------------------------------------------
+# ROUTES
+# --------------------------------------------------
+
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(documents.router)
 app.include_router(admin.router)
 
-# Les couvertures sont publiques (affichées dans les listes). Les PDF, eux, ne le sont jamais.
-app.mount("/covers", StaticFiles(directory=str(COVER_DIR)), name="covers")
 
+# --------------------------------------------------
+# COUVERTURES SUPABASE
+# --------------------------------------------------
+
+@app.get("/covers/{name}")
+async def cover(name: str):
+    """Redirige vers une URL signée d'une couverture privée Supabase."""
+
+    url = await storage.cover_signed_url(name)
+
+    return RedirectResponse(
+        url,
+        status_code=302,
+        headers={
+            "Cache-Control": "public, max-age=3000",
+        },
+    )
+
+
+# --------------------------------------------------
+# ROUTE PRINCIPALE
+# --------------------------------------------------
 
 @app.get("/")
 async def root():
-    return {"app": "Yaarexbook", "status": "ok"}
+    return {
+        "app": "Yaarexbook",
+        "status": "ok",
+    }
 
+
+# --------------------------------------------------
+# SERVICE WORKER
+# --------------------------------------------------
 
 @app.get("/sw.js")
 async def sw():
-    return Response(content="", media_type="application/javascript")
+    return Response(
+        content="",
+        media_type="application/javascript",
+    )
